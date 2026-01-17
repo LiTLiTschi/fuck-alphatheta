@@ -54,7 +54,20 @@ cd fuck-alphatheta
 pip install -r requirements.txt
 ```
 
-3. Copy and edit the configuration:
+3. Configure the application:
+
+**Option A: Interactive Configuration Wizard (Recommended)**
+```bash
+python configure.py
+```
+The wizard provides:
+- Click-based screen region selection
+- Color picking from screen
+- MIDI device listening and capture
+- Step-by-step guided setup
+- Live position tracking
+
+**Option B: Manual Configuration**
 ```bash
 copy config\default_config.yaml config\config.yaml
 # Edit config\config.yaml with your screen regions and MIDI mappings
@@ -62,7 +75,12 @@ copy config\default_config.yaml config\config.yaml
 
 ## Quick Start
 
-1. Start the application:
+1. Run the configuration wizard:
+```bash
+python configure.py
+```
+
+2. Start the application:
 ```bash
 python src/main.py
 ```
@@ -77,6 +95,31 @@ python src/main.py
 
 ## Configuration
 
+### Interactive Configuration Wizard
+
+The easiest way to configure the application is using the interactive wizard:
+
+```bash
+python configure.py
+```
+
+**Features:**
+- **Click-based region selection**: Click two corners to define screen regions
+- **Color picker**: Click anywhere on screen to capture RGB values
+- **MIDI device listening**: Send MIDI from your controller to auto-capture settings
+- **Live mouse position tracking**: See exact coordinates in real-time
+- **Step-by-step guidance**: Wizard walks you through each setting
+- **Validation**: Automatic validation before saving
+
+**Workflow:**
+1. Define general settings (MIDI port name, FPS)
+2. Add screen monitors (click regions, pick colors, capture MIDI)
+3. Add static shapes (click positions, listen for MIDI triggers)
+4. Add animated shapes (click positions, capture MIDI CC controllers)
+5. Save and validate configuration
+
+### Manual Configuration
+
 Edit `config/config.yaml` to customize:
 
 - Screen monitoring regions and target colors
@@ -84,13 +127,7 @@ Edit `config/config.yaml` to customize:
 - Overlay shape positions, sizes, and colors
 - Animation parameters for dynamic shapes
 
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for detailed configuration options.
-
-## Documentation
-
-- [SETUP.md](docs/SETUP.md) - Detailed installation and setup guide
-- [CONFIGURATION.md](docs/CONFIGURATION.md) - Complete configuration reference
-- [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common issues and solutions
+See `config/default_config.yaml` for a comprehensive template with detailed inline comments.
 
 ## Project Structure
 
