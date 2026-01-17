@@ -43,55 +43,76 @@ AlphaTheta (Pioneer DJ's mother company) has implemented hardware locks and jogw
 
 ## Installation
 
-1. Clone the repository:
+Install the package globally using pip:
+
+```bash
+pip install git+https://github.com/LiTLiTschi/fuck-alphatheta.git
+```
+
+Or clone and install from source:
+
 ```bash
 git clone https://github.com/LiTLiTschi/fuck-alphatheta.git
 cd fuck-alphatheta
+pip install -e .
 ```
 
-2. Install dependencies:
+This installs the `fucka` command globally on your system.
+
+## Quick Start
+
+1. Run the configuration wizard:
 ```bash
-pip install -r requirements.txt
+fucka config
 ```
 
-3. Configure the application:
-
-**Option A: Interactive Configuration Wizard (Recommended)**
-```bash
-python configure.py
-```
-The wizard provides:
+The interactive wizard provides:
 - Click-based screen region selection
 - Color picking from screen
 - MIDI device listening and capture
 - Step-by-step guided setup
 - Live position tracking
 
-**Option B: Manual Configuration**
-```bash
-copy config\default_config.yaml config\config.yaml
-# Edit config\config.yaml with your screen regions and MIDI mappings
-```
-
-## Quick Start
-
-1. Run the configuration wizard:
-```bash
-python configure.py
-```
-
 2. Start the application:
 ```bash
-python src/main.py
+fucka start
 ```
 
-2. The script will:
-   - Create a virtual MIDI port named "Rekordbox Helper"
-   - Start monitoring configured screen regions
-   - Display transparent overlay with shapes
-   - Send/receive MIDI messages with Bome
+3. Check status:
+```bash
+fucka status
+```
 
-3. Configure Bome MIDI Translator Pro to use the "Rekordbox Helper" virtual port
+4. Configure Bome MIDI Translator Pro to use the "Rekordbox Helper" virtual port
+
+5. Stop when done:
+```bash
+fucka stop
+```
+
+## Usage
+
+The `fucka` command provides several subcommands:
+
+```bash
+fucka config              # Run interactive configuration wizard
+fucka start               # Start application in background
+fucka start --debug       # Start with debug logging
+fucka stop                # Stop running application
+fucka status              # Check if running and show stats
+fucka run                 # Run in foreground (for debugging)
+fucka run --debug         # Run in foreground with debug output
+fucka logs                # Show recent logs
+fucka logs --follow       # Follow logs in real-time
+```
+
+### Background Mode
+
+The application runs as a background process:
+- Logs are saved to `~/.fucka/fucka.log`
+- PID file stored in `~/.fucka/fucka.pid`
+- Survives terminal closure
+- Auto-restart on crash (planned feature)
 
 ## Configuration
 
@@ -100,7 +121,7 @@ python src/main.py
 The easiest way to configure the application is using the interactive wizard:
 
 ```bash
-python configure.py
+fucka config
 ```
 
 **Features:**

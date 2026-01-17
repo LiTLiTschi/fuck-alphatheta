@@ -27,14 +27,12 @@ from pathlib import Path
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
 
-# Add src directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from config_loader import ConfigLoader, ConfigValidationError
-from screen_monitor import ScreenMonitor
-from midi_handler import MIDIHandler
-from overlay_window import OverlayWindow
-from utils.threading_utils import ThreadSafeQueue, ShutdownEvent
+# Import project modules (relative imports within package)
+from .config_loader import ConfigLoader, ConfigValidationError
+from .screen_monitor import ScreenMonitor
+from .midi_handler import MIDIHandler
+from .overlay_window import OverlayWindow
+from .utils.threading_utils import ThreadSafeQueue, ShutdownEvent
 
 
 class RekordboxMIDIHelper:

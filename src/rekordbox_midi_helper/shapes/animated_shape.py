@@ -14,8 +14,8 @@ from typing import Dict, Any
 from PyQt5.QtGui import QPainter, QColor, QPen, QBrush
 from PyQt5.QtCore import Qt
 
-from shapes.base_shape import BaseShape
-from utils.midi_utils import scale_value
+from .base_shape import BaseShape
+from ..utils.midi_utils import scale_value
 
 
 class AnimatedShape(BaseShape):

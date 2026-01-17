@@ -17,9 +17,9 @@ from PyQt5.QtWidgets import QWidget
 from PyQt5.QtGui import QPainter, QColor
 from PyQt5.QtCore import Qt, QTimer
 
-from shapes.static_shape import StaticShape
-from shapes.animated_shape import AnimatedShape
-from utils.threading_utils import ThreadSafeQueue
+from .shapes.static_shape import StaticShape
+from .shapes.animated_shape import AnimatedShape
+from .utils.threading_utils import ThreadSafeQueue
 
 
 class OverlayWindow(QWidget):

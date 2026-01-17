@@ -5,3 +5,4 @@ PyYAML>=6.0
 numpy>=1.24.0
 colorama>=0.4.6
 pynput>=1.7.6
+psutil>=5.9.0

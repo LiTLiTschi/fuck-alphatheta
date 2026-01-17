@@ -15,8 +15,8 @@ from threading import Thread
 from typing import Dict, Any, Optional, List
 import time
 
-from utils.midi_utils import create_note_on, create_note_off, create_cc, parse_midi_message
-from utils.threading_utils import ThreadSafeQueue, ShutdownEvent
+from .utils.midi_utils import create_note_on, create_note_off, create_cc, parse_midi_message
+from .utils.threading_utils import ThreadSafeQueue, ShutdownEvent
 
 
 class MIDIHandler:

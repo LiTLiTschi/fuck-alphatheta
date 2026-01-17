@@ -1,0 +1,5 @@
+# Include additional files in the package distribution
+include README.md
+include LICENSE
+include requirements.txt
+recursive-include config *.yaml

@@ -35,11 +35,10 @@ import numpy as np
 from colorama import init, Fore, Back, Style
 import rtmidi
 
-# Add src to path to import project modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-from utils.color_utils import rgb_to_hex, average_region_color
-from utils.midi_utils import parse_midi_message
-from config_loader import ConfigLoader, ConfigValidationError
+# Import project modules (relative imports within package)
+from .utils.color_utils import rgb_to_hex, average_region_color
+from .utils.midi_utils import parse_midi_message
+from .config_loader import ConfigLoader, ConfigValidationError
 
 # Initialize colorama for colored terminal output
 init(autoreset=True)
