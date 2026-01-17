@@ -18,6 +18,7 @@ import sys
 import os
 import time
 import threading
+import shutil
 from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 import yaml
@@ -88,10 +89,20 @@ class ConfigWizard:
         self.sct = mss.mss()
 
     def print_header(self, text: str):
-        """Print a styled header."""
-        print(f"\n{Fore.CYAN}{'=' * 70}")
-        print(f"{Fore.CYAN}{text.center(70)}")
-        print(f"{Fore.CYAN}{'=' * 70}{Style.RESET_ALL}\n")
+        """Print a styled header that adapts to terminal width."""
+        # Get terminal width, with fallback to 80
+        try:
+            width = shutil.get_terminal_size().columns
+        except:
+            width = 80
+
+        # Use minimum width of 40, maximum of 120
+        width = max(40, min(120, width))
+
+        # Print header with dynamic width
+        print(f"\n{Fore.CYAN}{'=' * width}")
+        print(f"{Fore.CYAN}{text.center(width)}")
+        print(f"{Fore.CYAN}{'=' * width}{Style.RESET_ALL}\n")
 
     def print_info(self, text: str):
         """Print info message."""
@@ -765,9 +776,16 @@ class ConfigWizard:
                         break
 
             # Save configuration
-            print("\n" + "=" * 70)
-            print("Configuration Summary:")
-            print("=" * 70)
+            # Get terminal width for summary box
+            try:
+                width = shutil.get_terminal_size().columns
+            except:
+                width = 80
+            width = max(40, min(120, width))
+
+            print("\n" + "=" * width)
+            print("Configuration Summary:".center(width))
+            print("=" * width)
             print(f"Screen monitors: {len(self.config['screen_monitors'])}")
             print(f"Static shapes: {len(self.config['shapes']['static'])}")
             print(f"Animated shapes: {len(self.config['shapes']['animated'])}")
