@@ -9,9 +9,11 @@
 # 3. Run the application: python src/main.py
 
 general:
-  # Name of the virtual MIDI port to create
-  # This port will appear in Bome MIDI Translator Pro
-  virtual_midi_port_name: "Rekordbox Helper"
+  # MIDI Port Configuration (Windows with loopMIDI)
+  # You must install loopMIDI and create a port first:
+  # Download: https://www.tobias-erichsen.de/software/loopmidi.html
+  # Then configure the port name using: fucka config
+  midi_port: "loopMIDI Port"
 
   # Screen monitoring frame rate (1-60 FPS)
   # Higher FPS = lower latency but higher CPU usage

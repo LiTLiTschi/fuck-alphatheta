@@ -34,7 +34,6 @@ except ImportError:
 import mss
 import numpy as np
 from colorama import init, Fore, Back, Style
-import rtmidi
 
 # Import project modules (relative imports within package)
 from .utils.color_utils import rgb_to_hex, average_region_color
@@ -78,10 +77,8 @@ class ConfigMenu:
         self.capture_active = False
         self.listener_active = False
 
-        # MIDI state
-        self.midi_in: Optional[rtmidi.MidiIn] = None
+        # MIDI state (for listen_for_midi)
         self.last_midi_message: Optional[Dict[str, Any]] = None
-        self.midi_listening = False
 
         # Screen capture
         self.sct = mss.mss()
@@ -435,7 +432,7 @@ class ConfigMenu:
 
     def listen_for_midi(self, timeout: int = 10) -> Optional[Dict[str, Any]]:
         """
-        Listen for incoming MIDI messages.
+        Listen for incoming MIDI messages using mido.
 
         Args:
             timeout: Seconds to listen before timing out
@@ -443,17 +440,15 @@ class ConfigMenu:
         Returns:
             MIDI message dict or None if timeout/cancelled
         """
+        import mido
+
         self.print_info(f"Listening for MIDI input ({timeout}s timeout)...")
         self.print_info("Send a MIDI message from your controller or Bome")
         self.print_info("Press ESC to cancel")
 
         try:
-            # Open MIDI input
-            if self.midi_in is None:
-                self.midi_in = rtmidi.MidiIn()
-
-            # List available MIDI ports
-            ports = self.midi_in.get_ports()
+            # List available input ports
+            ports = mido.get_input_names()
 
             if not ports:
                 self.print_warning("No MIDI input ports found!")
@@ -464,63 +459,81 @@ class ConfigMenu:
                 print(f"  {i+1}. {port}")
 
             # Let user select port
-            port_num = int(self.get_input(f"\nSelect port (1-{len(ports)})", "1"))
+            port_choice = self.get_int_input(
+                f"Select port (1-{len(ports)})",
+                1,
+                min_val=1,
+                max_val=len(ports)
+            )
 
-            if port_num < 1 or port_num > len(ports):
-                self.print_error("Invalid port number")
-                return None
+            selected_port = ports[port_choice - 1]
 
-            # Open the selected port
-            self.midi_in.open_port(port_num - 1)
+            # Open the port
+            midi_port = mido.open_input(selected_port)
 
-            self.last_midi_message = None
-            self.midi_listening = True
-
-            def midi_callback(event, data=None):
-                message, delta_time = event
-                msg_type, channel, data1, data2 = parse_midi_message(message)
-
-                if msg_type != 'unknown':
-                    self.last_midi_message = {
-                        'type': msg_type,
-                        'channel': channel,
-                        'data1': data1,
-                        'data2': data2
-                    }
-                    self.midi_listening = False
-
-            self.midi_in.set_callback(midi_callback)
-
-            # Wait for MIDI message or timeout
-            start_time = time.time()
+            # Listen for MIDI
+            captured_msg = [None]
+            cancelled = [False]
 
             def on_press(key):
                 if key == keyboard.Key.esc:
-                    self.midi_listening = False
+                    cancelled[0] = True
                     return False
 
             keyboard_listener = keyboard.Listener(on_press=on_press)
             keyboard_listener.start()
 
-            while self.midi_listening and (time.time() - start_time) < timeout:
-                remaining = int(timeout - (time.time() - start_time))
-                print(f"\rWaiting for MIDI... {remaining}s remaining", end='', flush=True)
-                time.sleep(0.1)
+            start_time = time.time()
 
-            keyboard_listener.stop()
-            print()  # New line
+            try:
+                while time.time() - start_time < timeout:
+                    if cancelled[0]:
+                        break
 
-            # Close MIDI port
-            self.midi_in.close_port()
+                    # Poll for messages
+                    for msg in midi_port.iter_pending():
+                        if msg.type == 'note_on' or msg.type == 'note_off':
+                            captured_msg[0] = {
+                                'type': 'note',
+                                'channel': msg.channel,
+                                'data1': msg.note,
+                                'data2': msg.velocity
+                            }
+                            break
+                        elif msg.type == 'control_change':
+                            captured_msg[0] = {
+                                'type': 'cc',
+                                'channel': msg.channel,
+                                'data1': msg.control,
+                                'data2': msg.value
+                            }
+                            break
 
-            if self.last_midi_message:
-                msg = self.last_midi_message
-                self.print_success(f"Captured MIDI: {msg['type']} on channel {msg['channel']}")
+                    if captured_msg[0]:
+                        break
+
+                    # Show remaining time
+                    remaining = int(timeout - (time.time() - start_time))
+                    print(f"\rWaiting for MIDI... {remaining}s remaining", end='', flush=True)
+                    time.sleep(0.1)
+
+                print()  # New line
+
+            finally:
+                keyboard_listener.stop()
+                midi_port.close()
+
+            if captured_msg[0]:
+                msg = captured_msg[0]
+                self.print_success(f"Captured MIDI: {msg['type']} on channel {msg['channel'] + 1}")
                 print(f"  Data1 (Note/Controller): {msg['data1']}")
                 print(f"  Data2 (Velocity/Value): {msg['data2']}")
-                return self.last_midi_message
+                return captured_msg[0]
+            elif cancelled[0]:
+                self.print_info("Cancelled")
+                return None
             else:
-                self.print_warning("No MIDI message received")
+                self.print_warning("Timeout - no MIDI received")
                 return None
 
         except Exception as e:
@@ -954,6 +967,66 @@ class ConfigMenu:
             return self.get_yes_no("Are you sure you want to exit?", False)
         return True
 
+    def configure_midi_port(self):
+        """Configure MIDI port for loopMIDI (Windows)."""
+        import mido
+
+        print(f"\n{Fore.CYAN}MIDI Port Configuration (Windows loopMIDI){Style.RESET_ALL}\n")
+        print("loopMIDI creates virtual MIDI ports that applications can use to communicate.")
+        print()
+
+        # List available I/O ports
+        try:
+            available = mido.get_ioport_names()
+        except Exception as e:
+            self.print_error(f"Failed to list MIDI ports: {e}")
+            return
+
+        if not available:
+            self.print_error("No MIDI ports found!")
+            print("\n" + "="*60)
+            print("You need to install loopMIDI:")
+            print("="*60)
+            print("1. Download: https://www.tobias-erichsen.de/software/loopmidi.html")
+            print("2. Install and launch loopMIDI application")
+            print("3. Enter a port name (e.g., 'loopMIDI Port')")
+            print("4. Click the '+' button to create the port")
+            print("5. Run this configuration again")
+            print("="*60 + "\n")
+            return
+
+        print(f"{Fore.CYAN}Available MIDI Ports:{Style.RESET_ALL}\n")
+        current_port = self.config.get('general', {}).get('midi_port',
+                      self.config.get('general', {}).get('virtual_midi_port_name', ''))
+
+        for i, port in enumerate(available):
+            current_marker = ""
+            if port == current_port:
+                current_marker = f" {Fore.GREEN}<-- current{Style.RESET_ALL}"
+            print(f"  {i+1}. {port}{current_marker}")
+
+        print()
+        choice = self.get_int_input(
+            f"Select MIDI port (1-{len(available)})",
+            1,
+            min_val=1,
+            max_val=len(available)
+        )
+
+        selected_port = available[choice - 1]
+
+        # Save to config
+        self.config['general']['midi_port'] = selected_port
+
+        print()
+        self.print_success(f"MIDI port configured: {selected_port}")
+        print()
+        print(f"{Fore.CYAN}Next steps:{Style.RESET_ALL}")
+        print("  1. Make sure loopMIDI is running with this port")
+        print("  2. Configure Bome MIDI Translator Pro to use the same port")
+        print("  3. Save this configuration (press 's')")
+        print()
+
     def menu_general_settings(self):
         """General settings menu with editing."""
         self.menu_stack.append("General Settings")
@@ -965,7 +1038,8 @@ class ConfigMenu:
 
             # Display current settings
             print(f"{Fore.CYAN}[Current Settings]{Style.RESET_ALL}\n")
-            print(f"  1. Virtual MIDI Port Name: {Fore.GREEN}{general.get('virtual_midi_port_name', 'Rekordbox Helper')}{Style.RESET_ALL}")
+            midi_port = general.get('midi_port', general.get('virtual_midi_port_name', 'loopMIDI Port'))
+            print(f"  1. MIDI Port (loopMIDI): {Fore.GREEN}{midi_port}{Style.RESET_ALL}")
             print(f"  2. Screen Monitor FPS: {Fore.GREEN}{general.get('screen_monitor_fps', 30)}{Style.RESET_ALL}")
             debug_status = "Enabled" if general.get('debug_mode', False) else "Disabled"
             debug_color = Fore.YELLOW if general.get('debug_mode', False) else Fore.GREEN
@@ -996,14 +1070,9 @@ class ConfigMenu:
                     setting_choice = choice
 
                 if setting_choice == '1':
-                    new_name = self.get_input(
-                        "Virtual MIDI Port Name",
-                        general.get('virtual_midi_port_name', 'Rekordbox Helper')
-                    )
-                    if new_name:
-                        self.config['general']['virtual_midi_port_name'] = new_name
-                        self.mark_unsaved()
-                        self.print_success("MIDI port name updated")
+                    self.configure_midi_port()
+                    self.mark_unsaved()
+                    self.print_success("MIDI port updated")
                 elif setting_choice == '2':
                     fps = self.get_int_input(
                         "Screen Monitor FPS (10-60)",

@@ -30,7 +30,7 @@ setup(
 
     # Dependencies
     install_requires=[
-        "python-rtmidi>=1.5.0",
+        "mido>=1.2.10",  # MIDI library with loopMIDI support for Windows
         "PyQt5>=5.15.0",
         "mss>=9.0.0",
         "PyYAML>=6.0",

@@ -200,12 +200,17 @@ class ConfigLoader:
 
     def get_midi_port_name(self) -> str:
         """
-        Get virtual MIDI port name.
+        Get MIDI port name for loopMIDI.
 
         Returns:
             MIDI port name string
         """
-        return self.config['general']['virtual_midi_port_name']
+        # New config structure
+        if 'midi_port' in self.config['general']:
+            return self.config['general']['midi_port']
+
+        # Legacy fallback (old config with virtual_midi_port_name)
+        return self.config['general'].get('virtual_midi_port_name', 'loopMIDI Port')
 
     def get_screen_monitor_fps(self) -> int:
         """
