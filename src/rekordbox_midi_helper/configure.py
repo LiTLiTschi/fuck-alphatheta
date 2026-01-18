@@ -270,6 +270,35 @@ class ConfigMenu:
             return default
         return response in ['y', 'yes']
 
+    def get_int_input(self, prompt: str, default: int, min_val: int = None, max_val: int = None) -> int:
+        """
+        Get integer input with validation and error handling.
+
+        Args:
+            prompt: Prompt message
+            default: Default value
+            min_val: Minimum acceptable value (optional)
+            max_val: Maximum acceptable value (optional)
+
+        Returns:
+            Valid integer within range
+        """
+        while True:
+            try:
+                value_str = self.get_input(prompt, str(default))
+                value = int(value_str)
+
+                if min_val is not None and value < min_val:
+                    self.print_error(f"Value must be at least {min_val}")
+                    continue
+                if max_val is not None and value > max_val:
+                    self.print_error(f"Value must be at most {max_val}")
+                    continue
+
+                return value
+            except ValueError:
+                self.print_error(f"Invalid number: '{value_str}'. Please enter a valid integer.")
+
     def capture_mouse_position(self) -> Tuple[int, int]:
         """
         Capture mouse position when user clicks.
@@ -369,7 +398,8 @@ class ConfigMenu:
             # Get average color
             avg_color = average_region_color(rgb_img)
 
-            return avg_color
+            # Convert numpy types to native Python int (fixes YAML serialization)
+            return (int(avg_color[0]), int(avg_color[1]), int(avg_color[2]))
         except Exception as e:
             self.print_error(f"Failed to capture color: {e}")
             return (0, 0, 0)
@@ -396,7 +426,8 @@ class ConfigMenu:
             print(f"  Hex: {hex_color}")
 
             # Try to show colored block (may not work in all terminals)
-            print(f"  Preview: {Back.BLACK}  {Style.RESET_ALL} ← Color sample")
+            r, g, b = color
+            print(f"  Preview: \033[48;2;{r};{g};{b}m    {Style.RESET_ALL} ← Color sample")
 
             return color
 
@@ -555,7 +586,7 @@ class ConfigMenu:
         print(f"\n{Fore.CYAN}Configure MIDI output:{Style.RESET_ALL}")
         midi_type = self.get_input("MIDI type (note/cc)", "note").lower()
 
-        if self.get_yes_no("Listen for MIDI to capture settings?", True):
+        if self.get_yes_no("Listen for MIDI to capture settings?", False):
             midi_msg = self.listen_for_midi()
             if midi_msg:
                 channel = midi_msg['channel']
@@ -569,15 +600,15 @@ class ConfigMenu:
                     value_nomatch = 0
             else:
                 # Manual input
-                channel = int(self.get_input("MIDI channel (1-16)", "1"))
+                channel = self.get_int_input("MIDI channel (1-16)", 1, min_val=1, max_val=16)
                 if midi_type == 'note':
-                    note = int(self.get_input("Note number (0-127)", "60"))
-                    velocity_on = int(self.get_input("Velocity when matched (0-127)", "127"))
-                    velocity_off = int(self.get_input("Velocity when not matched (0-127)", "0"))
+                    note = self.get_int_input("Note number (0-127)", 60, min_val=0, max_val=127)
+                    velocity_on = self.get_int_input("Velocity when matched (0-127)", 127, min_val=0, max_val=127)
+                    velocity_off = self.get_int_input("Velocity when not matched (0-127)", 0, min_val=0, max_val=127)
                 else:
-                    controller = int(self.get_input("CC controller (0-127)", "20"))
-                    value_match = int(self.get_input("Value when matched (0-127)", "127"))
-                    value_nomatch = int(self.get_input("Value when not matched (0-127)", "0"))
+                    controller = self.get_int_input("CC controller (0-127)", 20, min_val=0, max_val=127)
+                    value_match = self.get_int_input("Value when matched (0-127)", 127, min_val=0, max_val=127)
+                    value_nomatch = self.get_int_input("Value when not matched (0-127)", 0, min_val=0, max_val=127)
         else:
             channel = int(self.get_input("MIDI channel (1-16)", "1"))
             if midi_type == 'note':
@@ -625,7 +656,17 @@ class ConfigMenu:
         self.print_header("Configure Static Shape")
 
         shape_id = self.get_input("Shape ID (e.g., 'deck_a_indicator')")
-        shape_type = self.get_input("Shape type (circle/rectangle)", "circle").lower()
+
+        # Shape type menu
+        print(f"\n{Fore.CYAN}Shape type:{Style.RESET_ALL}")
+        print("  1. Circle")
+        print("  2. Rectangle")
+        shape_choice = input("Enter choice (1-2) [1]: ").strip() or "1"
+
+        if shape_choice == '2':
+            shape_type = 'rectangle'
+        else:
+            shape_type = 'circle'
 
         # Position
         print(f"\n{Fore.CYAN}Define shape position:{Style.RESET_ALL}")
@@ -700,7 +741,17 @@ class ConfigMenu:
         self.print_header("Configure Animated Shape")
 
         shape_id = self.get_input("Shape ID (e.g., 'crossfader_pie')")
-        shape_type = self.get_input("Shape type (pie_chart/progress_bar)", "pie_chart").lower()
+
+        # Shape type menu
+        print(f"\n{Fore.CYAN}Shape type:{Style.RESET_ALL}")
+        print("  1. Pie Chart")
+        print("  2. Progress Bar")
+        shape_choice = input("Enter choice (1-2) [1]: ").strip() or "1"
+
+        if shape_choice == '2':
+            shape_type = 'progress_bar'
+        else:
+            shape_type = 'pie_chart'
 
         # Position
         print(f"\n{Fore.CYAN}Define shape position:{Style.RESET_ALL}")
@@ -863,10 +914,12 @@ class ConfigMenu:
 
         # Get choice
         print()
-        choice = input(f"Enter choice (1-7, q): ").strip().lower()
+        choice = input(f"Enter choice (1-7, q, s to save): ").strip().lower()
 
         # Handle choice
-        if choice == '1':
+        if choice == 's':
+            self.save_config()
+        elif choice == '1':
             self.menu_general_settings()
         elif choice == '2':
             self.menu_screen_monitors()
@@ -925,9 +978,11 @@ class ConfigMenu:
             self.print_status_bar()
 
             print()
-            choice = input("Enter choice: ").strip().lower()
+            choice = input("Enter choice (s to save): ").strip().lower()
 
-            if choice == 'b' or choice == '0':
+            if choice == 's':
+                self.save_config()
+            elif choice == 'b' or choice == '0':
                 break
             elif choice == 'm':
                 self.menu_stack.pop()
@@ -950,20 +1005,15 @@ class ConfigMenu:
                         self.mark_unsaved()
                         self.print_success("MIDI port name updated")
                 elif setting_choice == '2':
-                    fps_str = self.get_input(
+                    fps = self.get_int_input(
                         "Screen Monitor FPS (10-60)",
-                        str(general.get('screen_monitor_fps', 30))
+                        general.get('screen_monitor_fps', 30),
+                        min_val=10,
+                        max_val=60
                     )
-                    try:
-                        fps = int(fps_str)
-                        if 10 <= fps <= 60:
-                            self.config['general']['screen_monitor_fps'] = fps
-                            self.mark_unsaved()
-                            self.print_success("FPS updated")
-                        else:
-                            self.print_error("FPS must be between 10 and 60")
-                    except ValueError:
-                        self.print_error("Invalid number")
+                    self.config['general']['screen_monitor_fps'] = fps
+                    self.mark_unsaved()
+                    self.print_success("FPS updated")
                 elif setting_choice == '3':
                     current_debug = general.get('debug_mode', False)
                     new_debug = self.get_yes_no("Enable debug mode?", current_debug)
@@ -1042,10 +1092,12 @@ class ConfigMenu:
 
             # Get choice
             print()
-            choice = input(f"Enter choice: ").strip().lower()
+            choice = input(f"Enter choice (s to save): ").strip().lower()
 
             # Handle choice
-            if choice == 'b' or choice == '0':
+            if choice == 's':
+                self.save_config()
+            elif choice == 'b' or choice == '0':
                 break
             elif choice == 'm':
                 self.menu_stack.pop()
@@ -1087,31 +1139,69 @@ class ConfigMenu:
         print(f"\n{Fore.CYAN}Define pixel position to monitor:{Style.RESET_ALL}")
         if self.get_yes_no("Click to capture pixel position?", True):
             position = self.capture_screen_pixel()
+
+            # AUTO-CAPTURE: Get color at clicked position
+            auto_color = self.capture_color_at_position(position['x'], position['y'])
+            hex_auto = rgb_to_hex(auto_color)
+
+            print(f"\n{Fore.CYAN}Color at clicked position:{Style.RESET_ALL}")
+            print(f"  RGB: ({auto_color[0]}, {auto_color[1]}, {auto_color[2]})")
+            print(f"  Hex: {hex_auto}")
+            r, g, b = auto_color
+            print(f"  Preview: \033[48;2;{r};{g};{b}m    {Style.RESET_ALL} ← Color sample")
+
+            if self.get_yes_no("Use this color?", True):
+                target_color = auto_color
+                color_dict = {'r': int(target_color[0]), 'g': int(target_color[1]), 'b': int(target_color[2])}
+            else:
+                # Allow re-capture or manual entry
+                if self.get_yes_no("Capture different color from screen?", True):
+                    target_color = self.capture_color_from_screen()
+                    color_dict = {'r': int(target_color[0]), 'g': int(target_color[1]), 'b': int(target_color[2])}
+                else:
+                    color_dict = {
+                        'r': self.get_int_input("Red (0-255)", int(auto_color[0]), min_val=0, max_val=255),
+                        'g': self.get_int_input("Green (0-255)", int(auto_color[1]), min_val=0, max_val=255),
+                        'b': self.get_int_input("Blue (0-255)", int(auto_color[2]), min_val=0, max_val=255)
+                    }
         else:
+            # Manual position entry
             position = {
-                'x': int(self.get_input("X position", "100")),
-                'y': int(self.get_input("Y position", "100"))
+                'x': self.get_int_input("X position", 100, min_val=0),
+                'y': self.get_int_input("Y position", 100, min_val=0)
             }
 
-        # Capture target color
-        print(f"\n{Fore.CYAN}Define target color to detect:{Style.RESET_ALL}")
-        if self.get_yes_no("Capture color from screen?", True):
-            target_color = self.capture_color_from_screen()
-            color_dict = {'r': target_color[0], 'g': target_color[1], 'b': target_color[2]}
-        else:
-            color_dict = {
-                'r': int(self.get_input("Red (0-255)", "255")),
-                'g': int(self.get_input("Green (0-255)", "0")),
-                'b': int(self.get_input("Blue (0-255)", "0"))
-            }
+            # Still auto-capture color at manual position
+            auto_color = self.capture_color_at_position(position['x'], position['y'])
+            hex_auto = rgb_to_hex(auto_color)
 
-        tolerance = int(self.get_input("Color tolerance (0-50, higher = less strict)", "10"))
+            print(f"\n{Fore.CYAN}Color at position ({position['x']}, {position['y']}):{Style.RESET_ALL}")
+            print(f"  RGB: ({auto_color[0]}, {auto_color[1]}, {auto_color[2]})")
+            print(f"  Hex: {hex_auto}")
+            r, g, b = auto_color
+            print(f"  Preview: \033[48;2;{r};{g};{b}m    {Style.RESET_ALL} ← Color sample")
+
+            if self.get_yes_no("Use this color?", True):
+                color_dict = {'r': int(auto_color[0]), 'g': int(auto_color[1]), 'b': int(auto_color[2])}
+            else:
+                # Manual color entry or re-capture
+                if self.get_yes_no("Capture different color from screen?", True):
+                    target_color = self.capture_color_from_screen()
+                    color_dict = {'r': int(target_color[0]), 'g': int(target_color[1]), 'b': int(target_color[2])}
+                else:
+                    color_dict = {
+                        'r': self.get_int_input("Red (0-255)", int(auto_color[0]), min_val=0, max_val=255),
+                        'g': self.get_int_input("Green (0-255)", int(auto_color[1]), min_val=0, max_val=255),
+                        'b': self.get_int_input("Blue (0-255)", int(auto_color[2]), min_val=0, max_val=255)
+                    }
+
+        tolerance = self.get_int_input("Color tolerance (0-50, higher = less strict)", 10, min_val=0, max_val=50)
 
         # MIDI output configuration
         print(f"\n{Fore.CYAN}Configure MIDI output:{Style.RESET_ALL}")
         midi_type = self.get_input("MIDI type (note/cc)", "note").lower()
 
-        if self.get_yes_no("Listen for MIDI to capture settings?", True):
+        if self.get_yes_no("Listen for MIDI to capture settings?", False):
             midi_msg = self.listen_for_midi()
             if midi_msg:
                 channel = midi_msg['channel']
@@ -1125,15 +1215,15 @@ class ConfigMenu:
                     value_nomatch = 0
             else:
                 # Manual input
-                channel = int(self.get_input("MIDI channel (1-16)", "1"))
+                channel = self.get_int_input("MIDI channel (1-16)", 1, min_val=1, max_val=16)
                 if midi_type == 'note':
-                    note = int(self.get_input("Note number (0-127)", "60"))
-                    velocity_on = int(self.get_input("Velocity when matched (0-127)", "127"))
-                    velocity_off = int(self.get_input("Velocity when not matched (0-127)", "0"))
+                    note = self.get_int_input("Note number (0-127)", 60, min_val=0, max_val=127)
+                    velocity_on = self.get_int_input("Velocity when matched (0-127)", 127, min_val=0, max_val=127)
+                    velocity_off = self.get_int_input("Velocity when not matched (0-127)", 0, min_val=0, max_val=127)
                 else:
-                    controller = int(self.get_input("CC controller (0-127)", "20"))
-                    value_match = int(self.get_input("Value when matched (0-127)", "127"))
-                    value_nomatch = int(self.get_input("Value when not matched (0-127)", "0"))
+                    controller = self.get_int_input("CC controller (0-127)", 20, min_val=0, max_val=127)
+                    value_match = self.get_int_input("Value when matched (0-127)", 127, min_val=0, max_val=127)
+                    value_nomatch = self.get_int_input("Value when not matched (0-127)", 0, min_val=0, max_val=127)
         else:
             channel = int(self.get_input("MIDI channel (1-16)", "1"))
             if midi_type == 'note':
@@ -1267,8 +1357,8 @@ class ConfigMenu:
                     new_pos = self.capture_screen_pixel()
                 else:
                     new_pos = {
-                        'x': int(self.get_input("X position", str(monitor.get('position', {}).get('x', 100)))),
-                        'y': int(self.get_input("Y position", str(monitor.get('position', {}).get('y', 100))))
+                        'x': self.get_int_input("X position", monitor.get('position', {}).get('x', 100), min_val=0),
+                        'y': self.get_int_input("Y position", monitor.get('position', {}).get('y', 100), min_val=0)
                     }
                 monitor['position'] = new_pos
                 # Remove old region if exists
@@ -1284,14 +1374,14 @@ class ConfigMenu:
                 else:
                     current_color = monitor.get('target_color', {})
                     monitor['target_color'] = {
-                        'r': int(self.get_input("Red (0-255)", str(current_color.get('r', 255)))),
-                        'g': int(self.get_input("Green (0-255)", str(current_color.get('g', 0)))),
-                        'b': int(self.get_input("Blue (0-255)", str(current_color.get('b', 0))))
+                        'r': self.get_int_input("Red (0-255)", current_color.get('r', 255), min_val=0, max_val=255),
+                        'g': self.get_int_input("Green (0-255)", current_color.get('g', 0), min_val=0, max_val=255),
+                        'b': self.get_int_input("Blue (0-255)", current_color.get('b', 0), min_val=0, max_val=255)
                     }
                 self.mark_unsaved()
                 self.print_success("Color updated")
             elif edit_choice == '4':
-                new_tol = int(self.get_input("Color tolerance (0-50)", str(monitor.get('tolerance', 10))))
+                new_tol = self.get_int_input("Color tolerance (0-50)", monitor.get('tolerance', 10), min_val=0, max_val=50)
                 monitor['tolerance'] = new_tol
                 self.mark_unsaved()
                 self.print_success("Tolerance updated")
@@ -1318,12 +1408,12 @@ class ConfigMenu:
                         self.print_success("MIDI output updated")
                 else:
                     current_midi = monitor.get('midi_output', {})
-                    channel = int(self.get_input("MIDI channel (1-16)", str(current_midi.get('channel', 1))))
+                    channel = self.get_int_input("MIDI channel (1-16)", current_midi.get('channel', 1), min_val=1, max_val=16)
 
                     if midi_type == 'note':
-                        note = int(self.get_input("Note number (0-127)", str(current_midi.get('note', 60))))
-                        velocity_on = int(self.get_input("Velocity ON (0-127)", str(current_midi.get('velocity_on', 127))))
-                        velocity_off = int(self.get_input("Velocity OFF (0-127)", str(current_midi.get('velocity_off', 0))))
+                        note = self.get_int_input("Note number (0-127)", current_midi.get('note', 60), min_val=0, max_val=127)
+                        velocity_on = self.get_int_input("Velocity ON (0-127)", current_midi.get('velocity_on', 127), min_val=0, max_val=127)
+                        velocity_off = self.get_int_input("Velocity OFF (0-127)", current_midi.get('velocity_off', 0), min_val=0, max_val=127)
                         monitor['midi_output'] = {
                             'type': 'note',
                             'channel': channel,
@@ -1332,9 +1422,9 @@ class ConfigMenu:
                             'velocity_off': velocity_off
                         }
                     else:
-                        controller = int(self.get_input("CC controller (0-127)", str(current_midi.get('controller', 20))))
-                        value_match = int(self.get_input("Value when matched (0-127)", str(current_midi.get('value_match', 127))))
-                        value_nomatch = int(self.get_input("Value when not matched (0-127)", str(current_midi.get('value_nomatch', 0))))
+                        controller = self.get_int_input("CC controller (0-127)", current_midi.get('controller', 20), min_val=0, max_val=127)
+                        value_match = self.get_int_input("Value when matched (0-127)", current_midi.get('value_match', 127), min_val=0, max_val=127)
+                        value_nomatch = self.get_int_input("Value when not matched (0-127)", current_midi.get('value_nomatch', 0), min_val=0, max_val=127)
                         monitor['midi_output'] = {
                             'type': 'cc',
                             'channel': channel,
@@ -1490,9 +1580,11 @@ class ConfigMenu:
             self.print_status_bar()
 
             print()
-            choice = input("Enter choice: ").strip().lower()
+            choice = input("Enter choice (s to save): ").strip().lower()
 
-            if choice == 'b' or choice == '0':
+            if choice == 's':
+                self.save_config()
+            elif choice == 'b' or choice == '0':
                 break
             elif choice == 'm':
                 self.menu_stack.pop()
@@ -1690,9 +1782,11 @@ class ConfigMenu:
             self.print_status_bar()
 
             print()
-            choice = input("Enter choice: ").strip().lower()
+            choice = input("Enter choice (s to save): ").strip().lower()
 
-            if choice == 'b' or choice == '0':
+            if choice == 's':
+                self.save_config()
+            elif choice == 'b' or choice == '0':
                 break
             elif choice == 'm':
                 self.menu_stack.pop()
