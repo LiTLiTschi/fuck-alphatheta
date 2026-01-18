@@ -2040,10 +2040,11 @@ class ConfigMenu:
         self.print_header("Test MIDI Connections")
 
         try:
+            import mido
+
             # Test MIDI input
             print(f"{Fore.CYAN}MIDI Input Ports:{Style.RESET_ALL}\n")
-            midi_in = rtmidi.MidiIn()
-            in_ports = midi_in.get_ports()
+            in_ports = mido.get_input_names()
 
             if in_ports:
                 for i, port in enumerate(in_ports):
@@ -2055,21 +2056,41 @@ class ConfigMenu:
 
             # Test MIDI output
             print(f"{Fore.CYAN}MIDI Output Ports:{Style.RESET_ALL}\n")
-            midi_out = rtmidi.MidiOut()
-            out_ports = midi_out.get_ports()
+            out_ports = mido.get_output_names()
 
             if out_ports:
-                for i, port in enumerate(out_ports):
-                    print(f"  {i+1}. {port}")
-
-                # Check if our MIDI port exists
                 port_name = self.config.get('general', {}).get('midi_port', 'loopMIDI Port')
-                if any(port_name in port for port in out_ports):
-                    self.print_success(f"Virtual MIDI port '{port_name}' found!")
+
+                for i, port in enumerate(out_ports):
+                    # Highlight configured port
+                    marker = f" {Fore.GREEN}(configured){Style.RESET_ALL}" if port == port_name else ""
+                    print(f"  {i+1}. {port}{marker}")
+
+                # Check if configured port exists
+                if port_name in out_ports:
+                    self.print_success(f"✓ Configured MIDI port '{port_name}' found!")
+
+                    # Offer to send test message
+                    if self.get_yes_no("Send test MIDI note to verify connection?", False):
+                        try:
+                            midi_out = mido.open_output(port_name)
+                            midi_out.send(mido.Message('note_on', note=60, velocity=100, channel=0))
+                            time.sleep(0.1)
+                            midi_out.send(mido.Message('note_off', note=60, channel=0))
+                            midi_out.close()
+                            self.print_success("✓ Test MIDI message sent successfully!")
+                        except Exception as e:
+                            self.print_error(f"Failed to send test message: {e}")
                 else:
-                    self.print_warning(f"Virtual MIDI port '{port_name}' not found (will be created when app starts)")
+                    self.print_warning(f"⚠ Configured port '{port_name}' not found!")
+                    print(f"\n  Please install loopMIDI and create a port:")
+                    print(f"  https://www.tobias-erichsen.de/software/loopmidi.html")
             else:
                 print(f"  {Fore.YELLOW}No MIDI output ports found{Style.RESET_ALL}")
+                print(f"\n  {Fore.YELLOW}Please install loopMIDI:{Style.RESET_ALL}")
+                print(f"  1. Download: https://www.tobias-erichsen.de/software/loopmidi.html")
+                print(f"  2. Install and launch loopMIDI")
+                print(f"  3. Create a new port (click '+' button)")
 
             print()
 
@@ -2079,7 +2100,7 @@ class ConfigMenu:
                     msg = self.listen_for_midi(timeout=10)
                     if msg:
                         print()
-                        self.print_success("MIDI test successful!")
+                        self.print_success("✓ MIDI test successful!")
 
         except Exception as e:
             self.print_error(f"MIDI test failed: {e}")
