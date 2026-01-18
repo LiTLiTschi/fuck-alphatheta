@@ -1,11 +1,12 @@
 """
-Screen monitoring thread for detecting color changes in specific screen regions.
+Screen monitoring thread for detecting color changes at specific pixel positions.
 
-This module captures screen regions using MSS and detects when colors match
+This module captures single pixels using MSS and detects when colors match
 configured targets. When a match is detected, MIDI events are queued for sending.
 
 Threading: Runs in a separate thread to avoid blocking the UI
 Performance: Achieves 30-100 FPS depending on configuration
+Note: Monitors single pixels for optimal performance, not regions
 """
 
 import mss
@@ -20,10 +21,13 @@ from .utils.threading_utils import ThreadSafeQueue, ShutdownEvent, RateLimiter
 
 class ScreenMonitor(Thread):
     """
-    Thread that monitors screen regions for color changes.
+    Thread that monitors screen pixels for color changes.
 
-    Captures specified screen regions at configurable FPS and detects when
+    Captures specified pixels at configurable FPS and detects when
     the color matches configured targets. Sends MIDI events when state changes.
+
+    Supports both 'position' (new single-pixel format) and 'region' (old format)
+    for backward compatibility.
 
     Example:
         monitor = ScreenMonitor(monitors_config, midi_queue, shutdown_event, fps=30)
@@ -100,13 +104,25 @@ class ScreenMonitor(Thread):
             monitor_config: Configuration dictionary for this monitor
         """
         monitor_id = monitor_config['id']
-        region = monitor_config['region']
+
+        # Support both 'position' (new) and 'region' (old) formats
+        if 'position' in monitor_config:
+            position = monitor_config['position']
+        elif 'region' in monitor_config:
+            # Backward compatibility: extract x,y from old region format
+            region = monitor_config['region']
+            position = {'x': region['x'], 'y': region['y']}
+        else:
+            if self.debug:
+                print(f"[ScreenMonitor] {monitor_id}: Missing position/region config")
+            return
+
         target_color = monitor_config['target_color']
         tolerance = monitor_config['tolerance']
         midi_output = monitor_config['midi_output']
 
-        # Capture screen region
-        captured_color = self._capture_region_color(region)
+        # Capture pixel color
+        captured_color = self._capture_pixel_color(position)
 
         if captured_color is None:
             return  # Capture failed
@@ -129,9 +145,49 @@ class ScreenMonitor(Thread):
                 state_str = "MATCHED" if matches else "UNMATCHED"
                 print(f"[ScreenMonitor] {monitor_id}: {state_str} - Color: {captured_color}")
 
+    def _capture_pixel_color(self, position: Dict[str, int]) -> Tuple[int, int, int]:
+        """
+        Capture a single pixel and return its color.
+
+        Args:
+            position: Dictionary with x, y coordinates
+
+        Returns:
+            RGB tuple (r, g, b) or None if capture fails
+        """
+        try:
+            # Define single pixel region for MSS
+            monitor_region = {
+                "left": position['x'],
+                "top": position['y'],
+                "width": 1,
+                "height": 1
+            }
+
+            # Capture single pixel
+            screenshot = self.sct.grab(monitor_region)
+
+            # Convert to numpy array (BGRA format from MSS)
+            img = np.array(screenshot)
+
+            # MSS returns BGRA, convert to RGB
+            # Get single pixel color (no averaging needed)
+            # Format: img[y, x, channel] but for 1x1 it's img[0, 0, channel]
+            rgb_color = (img[0, 0, 2], img[0, 0, 1], img[0, 0, 0])  # BGR to RGB
+
+            return rgb_color
+
+        except Exception as e:
+            if self.debug:
+                print(f"[ScreenMonitor] Error capturing pixel: {e}")
+            return None
+
     def _capture_region_color(self, region: Dict[str, int]) -> Tuple[int, int, int]:
         """
-        Capture a screen region and return its average color.
+        Capture a screen region and return its average color (DEPRECATED).
+
+        This method is kept for backward compatibility with old configs.
+        New code should use _capture_pixel_color instead.
 
         Args:
             region: Dictionary with x, y, width, height
@@ -144,8 +200,8 @@ class ScreenMonitor(Thread):
             monitor_region = {
                 "left": region['x'],
                 "top": region['y'],
-                "width": region['width'],
-                "height": region['height']
+                "width": region.get('width', 1),
+                "height": region.get('height', 1)
             }
 
             # Capture screen region

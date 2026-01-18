@@ -3,8 +3,11 @@ Configuration loader for the Rekordbox MIDI Helper.
 
 Loads and validates YAML configuration files that define:
 - General application settings
-- Screen monitoring regions and MIDI output mappings
+- Screen monitoring pixel positions and MIDI output mappings
 - Overlay shapes (static and animated)
+
+Supports both 'position' (new single-pixel format) and 'region' (old format)
+for backward compatibility.
 
 Example usage:
     config = ConfigLoader('config/config.yaml')
@@ -29,8 +32,10 @@ class ConfigLoader:
 
     The configuration file should contain:
     - general: Application settings (MIDI port name, FPS, debug mode)
-    - screen_monitors: List of screen regions to monitor for color changes
+    - screen_monitors: List of pixel positions to monitor for color changes
     - shapes: Static and animated shapes for the overlay
+
+    Supports both 'position' (x, y) and 'region' (x, y, width, height) formats.
     """
 
     def __init__(self, config_path: str):
@@ -112,7 +117,8 @@ class ConfigLoader:
 
     def _validate_screen_monitor(self, monitor: Dict[str, Any], index: int):
         """Validate a single screen monitor configuration."""
-        required_fields = ['id', 'region', 'target_color', 'tolerance', 'midi_output']
+        # Support both 'position' (new) and 'region' (old) formats
+        required_fields = ['id', 'target_color', 'tolerance', 'midi_output']
 
         for field in required_fields:
             if field not in monitor:
@@ -120,13 +126,29 @@ class ConfigLoader:
                     f"Screen monitor {index}: missing required field '{field}'"
                 )
 
-        # Validate region has x, y, width, height
-        region = monitor['region']
-        for field in ['x', 'y', 'width', 'height']:
-            if field not in region:
-                raise ConfigValidationError(
-                    f"Screen monitor {index}: region missing '{field}'"
-                )
+        # Validate position/region field
+        if 'position' not in monitor and 'region' not in monitor:
+            raise ConfigValidationError(
+                f"Screen monitor {index}: missing 'position' or 'region' field"
+            )
+
+        # Validate position (new format) has x, y
+        if 'position' in monitor:
+            position = monitor['position']
+            for field in ['x', 'y']:
+                if field not in position:
+                    raise ConfigValidationError(
+                        f"Screen monitor {index}: position missing '{field}'"
+                    )
+
+        # Validate region (old format) has x, y, width, height
+        if 'region' in monitor and 'position' not in monitor:
+            region = monitor['region']
+            for field in ['x', 'y', 'width', 'height']:
+                if field not in region:
+                    raise ConfigValidationError(
+                        f"Screen monitor {index}: region missing '{field}'"
+                    )
 
         # Validate target_color has r, g, b
         color = monitor['target_color']

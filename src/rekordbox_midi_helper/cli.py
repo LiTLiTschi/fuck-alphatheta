@@ -111,20 +111,20 @@ def remove_pid():
 
 
 def cmd_config(args):
-    """Run the configuration wizard."""
-    from .configure import ConfigWizard
+    """Run the configuration menu."""
+    from .configure import ConfigMenu
 
-    print_info("Starting configuration wizard...")
+    print_info("Starting configuration menu...")
     print()
 
     config_path = args.config if hasattr(args, 'config') else 'config/config.yaml'
-    wizard = ConfigWizard(config_path)
+    menu = ConfigMenu(config_path)
 
     try:
-        wizard.run()
+        menu.run()
     except KeyboardInterrupt:
         print("\n")
-        print_warning("Configuration wizard cancelled")
+        print_warning("Configuration menu cancelled")
         sys.exit(1)
 
 

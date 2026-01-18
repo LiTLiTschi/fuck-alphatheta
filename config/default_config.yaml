@@ -22,18 +22,17 @@ general:
   debug_mode: false
 
 # Screen monitoring configuration
-# Each monitor watches a specific screen region for color changes
+# Each monitor watches a specific pixel position for color changes
 # When the color matches the target (within tolerance), a MIDI message is sent
 screen_monitors:
   # Example: Monitor Deck A play button
   - id: "deck_a_playing"
 
-    # Screen region to monitor (pixels from top-left)
-    region:
+    # Single pixel position to monitor (pixels from top-left)
+    # NOTE: Monitors exactly ONE pixel for optimal performance
+    position:
       x: 100        # X coordinate
       y: 200        # Y coordinate
-      width: 50     # Width of region
-      height: 50    # Height of region
 
     # Target color to detect (RGB values 0-255)
     target_color:
@@ -56,11 +55,9 @@ screen_monitors:
 
   # Example: Monitor Deck B cue point with CC message
   - id: "deck_b_cue"
-    region:
+    position:
       x: 500
       y: 200
-      width: 50
-      height: 50
     target_color:
       r: 0
       g: 255
@@ -186,19 +183,23 @@ shapes:
 # Tips for configuration:
 #
 # Finding screen coordinates:
-# - Use Windows Snipping Tool or a screen coordinate tool
+# - Use the interactive configuration wizard: fucka config
+# - Or use Windows Snipping Tool or a screen coordinate tool
 # - Top-left corner of your monitor is (0, 0)
+# - Each monitor captures exactly ONE pixel for optimal performance
 #
 # Finding colors:
-# - Use a color picker tool to get RGB values
+# - Use the configuration wizard to capture colors by clicking
+# - Or use a color picker tool to get RGB values
 # - Set tolerance higher if the color changes slightly (like gradients or animations)
 #
 # MIDI mapping:
-# - Test with MIDI-OX or similar tool first
+# - Use the configuration wizard to capture MIDI messages from your controller
+# - Or test with MIDI-OX or similar tool first
 # - Make sure channel numbers match between this config and Bome
 # - Note numbers and CC controllers can be any value 0-127
 #
 # Performance:
 # - Start with screen_monitor_fps: 30
 # - Reduce if CPU usage is too high
-# - Monitor fewer regions for better performance
+# - Single-pixel monitoring is much faster than region monitoring
