@@ -36,7 +36,7 @@ import numpy as np
 from colorama import init, Fore, Back, Style
 
 # Import project modules (relative imports within package)
-from .utils.color_utils import rgb_to_hex, average_region_color
+from .utils.color_utils import rgb_to_hex
 from .utils.midi_utils import parse_midi_message
 from .config_loader import ConfigLoader, ConfigValidationError
 
@@ -378,25 +378,22 @@ class ConfigMenu:
             RGB tuple (r, g, b)
         """
         try:
-            # Capture small region around position
+            # Capture single pixel (1x1) - no averaging
             monitor = {
-                "left": x - 2,
-                "top": y - 2,
-                "width": 5,
-                "height": 5
+                "left": x,
+                "top": y,
+                "width": 1,
+                "height": 1
             }
 
             screenshot = self.sct.grab(monitor)
-            img = np.array(screenshot)
 
-            # Convert BGRA to RGB
-            rgb_img = img[:, :, [2, 1, 0]]
+            # mss returns BGRA, get RGB from single pixel
+            # screenshot.pixel(0, 0) returns (B, G, R, A)
+            pixel = screenshot.pixel(0, 0)
 
-            # Get average color
-            avg_color = average_region_color(rgb_img)
-
-            # Convert numpy types to native Python int (fixes YAML serialization)
-            return (int(avg_color[0]), int(avg_color[1]), int(avg_color[2]))
+            # Return as RGB (convert from BGR)
+            return (int(pixel[2]), int(pixel[1]), int(pixel[0]))
         except Exception as e:
             self.print_error(f"Failed to capture color: {e}")
             return (0, 0, 0)

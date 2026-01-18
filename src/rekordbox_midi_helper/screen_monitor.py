@@ -15,7 +15,7 @@ from threading import Thread
 from typing import Dict, List, Any, Tuple
 import time
 
-from .utils.color_utils import color_matches, average_region_color
+from .utils.color_utils import color_matches
 from .utils.threading_utils import ThreadSafeQueue, ShutdownEvent, RateLimiter
 
 
