@@ -113,11 +113,17 @@ def remove_pid():
 def cmd_config(args):
     """Run the configuration menu."""
     from .configure import ConfigMenu
+    from .utils.config_path import ensure_config_exists
 
     print_info("Starting configuration menu...")
     print()
 
-    config_path = args.config if hasattr(args, 'config') else 'config/config.yaml'
+    # Use ~/.fucka/config.yaml (or custom path if provided)
+    if hasattr(args, 'config') and args.config:
+        config_path = args.config
+    else:
+        config_path = str(ensure_config_exists())
+
     menu = ConfigMenu(config_path)
 
     try:
@@ -130,6 +136,8 @@ def cmd_config(args):
 
 def cmd_start(args):
     """Start the application in background."""
+    from .utils.config_path import get_config_path
+
     # Check if already running
     pid = is_running()
     if pid:
@@ -137,8 +145,13 @@ def cmd_start(args):
         print_info(f"Use 'fucka stop' to stop it first")
         sys.exit(1)
 
+    # Use ~/.fucka/config.yaml (or custom path if provided)
+    if hasattr(args, 'config') and args.config:
+        config_path = args.config
+    else:
+        config_path = str(get_config_path())
+
     # Check if config exists
-    config_path = args.config
     if not os.path.exists(config_path):
         print_error(f"Configuration file not found: {config_path}")
         print_info("Run 'fucka config' to create a configuration file")

@@ -19,6 +19,7 @@ import yaml
 import os
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+from .utils.config_path import ensure_config_exists
 
 
 class ConfigValidationError(Exception):
@@ -38,18 +39,23 @@ class ConfigLoader:
     Supports both 'position' (x, y) and 'region' (x, y, width, height) formats.
     """
 
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: Optional[str] = None):
         """
         Initialize configuration loader.
 
         Args:
-            config_path: Path to YAML configuration file
+            config_path: Optional path to YAML configuration file. If None, uses ~/.fucka/config.yaml
 
         Raises:
             FileNotFoundError: If config file doesn't exist
             ConfigValidationError: If config is invalid
         """
-        self.config_path = config_path
+        if config_path:
+            self.config_path = config_path
+        else:
+            # Use default location: ~/.fucka/config.yaml
+            self.config_path = str(ensure_config_exists())
+
         self.config = self._load_config()
         self._validate_config()
 
@@ -87,8 +93,8 @@ class ConfigLoader:
             raise ConfigValidationError("Missing 'general' section in config")
 
         general = self.config['general']
-        if 'virtual_midi_port_name' not in general:
-            raise ConfigValidationError("Missing 'virtual_midi_port_name' in general section")
+        if 'midi_port' not in general:
+            raise ConfigValidationError("Missing 'midi_port' in general section")
 
         # Validate screen_monitors section (optional but if present, validate structure)
         if 'screen_monitors' in self.config:
@@ -205,12 +211,7 @@ class ConfigLoader:
         Returns:
             MIDI port name string
         """
-        # New config structure
-        if 'midi_port' in self.config['general']:
-            return self.config['general']['midi_port']
-
-        # Legacy fallback (old config with virtual_midi_port_name)
-        return self.config['general'].get('virtual_midi_port_name', 'loopMIDI Port')
+        return self.config['general'].get('midi_port', 'loopMIDI Port')
 
     def get_screen_monitor_fps(self) -> int:
         """

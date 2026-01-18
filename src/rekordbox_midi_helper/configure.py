@@ -87,7 +87,7 @@ class ConfigMenu:
         """Initialize default configuration structure."""
         self.config: Dict[str, Any] = {
             'general': {
-                'virtual_midi_port_name': 'Rekordbox Helper',
+                'midi_port': 'loopMIDI Port',
                 'screen_monitor_fps': 30,
                 'debug_mode': False
             },
@@ -544,9 +544,9 @@ class ConfigMenu:
         """Configure general application settings."""
         self.print_header("General Settings")
 
-        self.config['general']['virtual_midi_port_name'] = self.get_input(
-            "Virtual MIDI port name",
-            self.config['general']['virtual_midi_port_name']
+        self.config['general']['midi_port'] = self.get_input(
+            "MIDI port name",
+            self.config['general']['midi_port']
         )
 
         fps_str = self.get_input(
@@ -996,8 +996,7 @@ class ConfigMenu:
             return
 
         print(f"{Fore.CYAN}Available MIDI Ports:{Style.RESET_ALL}\n")
-        current_port = self.config.get('general', {}).get('midi_port',
-                      self.config.get('general', {}).get('virtual_midi_port_name', ''))
+        current_port = self.config.get('general', {}).get('midi_port', 'loopMIDI Port')
 
         for i, port in enumerate(available):
             current_marker = ""
@@ -1038,7 +1037,7 @@ class ConfigMenu:
 
             # Display current settings
             print(f"{Fore.CYAN}[Current Settings]{Style.RESET_ALL}\n")
-            midi_port = general.get('midi_port', general.get('virtual_midi_port_name', 'loopMIDI Port'))
+            midi_port = general.get('midi_port', 'loopMIDI Port')
             print(f"  1. MIDI Port (loopMIDI): {Fore.GREEN}{midi_port}{Style.RESET_ALL}")
             print(f"  2. Screen Monitor FPS: {Fore.GREEN}{general.get('screen_monitor_fps', 30)}{Style.RESET_ALL}")
             debug_status = "Enabled" if general.get('debug_mode', False) else "Disabled"
@@ -2066,8 +2065,8 @@ class ConfigMenu:
                 for i, port in enumerate(out_ports):
                     print(f"  {i+1}. {port}")
 
-                # Check if our virtual port exists
-                port_name = self.config.get('general', {}).get('virtual_midi_port_name', 'Rekordbox Helper')
+                # Check if our MIDI port exists
+                port_name = self.config.get('general', {}).get('midi_port', 'loopMIDI Port')
                 if any(port_name in port for port in out_ports):
                     self.print_success(f"Virtual MIDI port '{port_name}' found!")
                 else:
@@ -2113,7 +2112,7 @@ class ConfigMenu:
                 print(f"  Screen Monitors: {len(self.config.get('screen_monitors', []))}")
                 print(f"  Static Shapes: {len(self.config.get('shapes', {}).get('static', []))}")
                 print(f"  Animated Shapes: {len(self.config.get('shapes', {}).get('animated', []))}")
-                print(f"  MIDI Port: {self.config.get('general', {}).get('virtual_midi_port_name', 'N/A')}")
+                print(f"  MIDI Port: {self.config.get('general', {}).get('midi_port', 'N/A')}")
                 print(f"  Monitor FPS: {self.config.get('general', {}).get('screen_monitor_fps', 30)}")
 
             except ConfigValidationError as e:
