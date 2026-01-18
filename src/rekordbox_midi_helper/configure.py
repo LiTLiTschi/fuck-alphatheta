@@ -975,9 +975,9 @@ class ConfigMenu:
         print("loopMIDI creates virtual MIDI ports that applications can use to communicate.")
         print()
 
-        # List available I/O ports
+        # List available output ports (loopMIDI ports show up here)
         try:
-            available = mido.get_ioport_names()
+            available = mido.get_output_names()
         except Exception as e:
             self.print_error(f"Failed to list MIDI ports: {e}")
             return

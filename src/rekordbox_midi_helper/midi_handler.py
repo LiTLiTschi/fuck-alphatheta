@@ -57,8 +57,9 @@ class MIDIHandler:
         self.shutdown_event = shutdown_event
         self.debug = debug
 
-        # Single bidirectional MIDI port
-        self.midi_port: Optional[mido.ports.IOPort] = None
+        # Separate MIDI input and output ports (loopMIDI creates these separately)
+        self.midi_out: Optional[mido.ports.BaseOutput] = None
+        self.midi_in: Optional[mido.ports.BaseInput] = None
 
         # Threads
         self.output_thread: Optional[Thread] = None
@@ -76,16 +77,18 @@ class MIDIHandler:
         """
         try:
             # List available ports for debugging
-            available_ports = mido.get_ioport_names()
+            output_ports = mido.get_output_names()
+            input_ports = mido.get_input_names()
 
             if self.debug:
-                print(f"[MIDI] Available ports: {available_ports}")
+                print(f"[MIDI] Available output ports: {output_ports}")
+                print(f"[MIDI] Available input ports: {input_ports}")
 
             # Check if port exists
-            if self.port_name not in available_ports:
+            if self.port_name not in output_ports:
                 raise ValueError(
                     f"MIDI port '{self.port_name}' not found.\n\n"
-                    f"Available ports: {', '.join(available_ports) if available_ports else 'None'}\n\n"
+                    f"Available ports: {', '.join(output_ports) if output_ports else 'None'}\n\n"
                     "Windows Setup Instructions:\n"
                     "1. Download loopMIDI: https://www.tobias-erichsen.de/software/loopmidi.html\n"
                     "2. Install and launch loopMIDI\n"
@@ -95,8 +98,9 @@ class MIDIHandler:
                     "6. Select your loopMIDI port from the list"
                 )
 
-            # Connect to bidirectional port
-            self.midi_port = mido.open_ioport(self.port_name)
+            # Connect to separate output and input ports
+            self.midi_out = mido.open_output(self.port_name)
+            self.midi_in = mido.open_input(self.port_name)
 
             if self.debug:
                 print(f"[MIDI] Connected to loopMIDI port: '{self.port_name}'")
@@ -125,7 +129,7 @@ class MIDIHandler:
 
     def stop(self):
         """
-        Stop MIDI threads and close port.
+        Stop MIDI threads and close ports.
         """
         if self.debug:
             print("[MIDI] Stopping MIDI handler...")
@@ -137,10 +141,16 @@ class MIDIHandler:
         if self.input_thread and self.input_thread.is_alive():
             self.input_thread.join(timeout=2.0)
 
-        # Close MIDI port
-        if self.midi_port:
+        # Close MIDI ports
+        if self.midi_out:
             try:
-                self.midi_port.close()
+                self.midi_out.close()
+            except:
+                pass
+
+        if self.midi_in:
+            try:
+                self.midi_in.close()
             except:
                 pass
 
@@ -214,14 +224,14 @@ class MIDIHandler:
 
     def _send_message(self, message: List[int]):
         """
-        Send a MIDI message through the port.
+        Send a MIDI message through the output port.
 
         Converts raw byte message to mido Message object.
 
         Args:
             message: MIDI message as list of integers (status byte + data)
         """
-        if self.midi_port is None:
+        if self.midi_out is None:
             return
 
         try:
@@ -251,7 +261,7 @@ class MIDIHandler:
                 return
 
             # Send via mido
-            self.midi_port.send(msg)
+            self.midi_out.send(msg)
 
             if self.debug:
                 msg_type_str, channel_num, data1, data2 = parse_midi_message(message)
@@ -274,7 +284,7 @@ class MIDIHandler:
         while not self.shutdown_event.is_set():
             try:
                 # Poll for incoming messages
-                for msg in self.midi_port.iter_pending():
+                for msg in self.midi_in.iter_pending():
                     if msg.type == 'note_on':
                         midi_event = {
                             'type': 'note_on',
@@ -327,10 +337,11 @@ class MIDIHandler:
         Check if MIDI handler is running.
 
         Returns:
-            True if port is open and threads are running
+            True if ports are open and threads are running
         """
         return (
-            self.midi_port is not None and
+            self.midi_out is not None and
+            self.midi_in is not None and
             self.output_thread is not None and
             self.output_thread.is_alive() and
             self.input_thread is not None and
