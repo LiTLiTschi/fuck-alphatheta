@@ -1143,7 +1143,8 @@ class ConfigMenu:
         while True:
             self.print_menu_header("Screen Monitors")
 
-            monitors = self.config.get('screen_monitors', [])
+            preset = self.get_active_preset()
+            monitors = preset.get('screen_monitors', [])
 
             # List all monitors
             if monitors:
@@ -1233,7 +1234,8 @@ class ConfigMenu:
             return
 
         # Check for duplicate IDs
-        existing_ids = [m['id'] for m in self.config.get('screen_monitors', [])]
+        preset = self.get_active_preset()
+        existing_ids = [m['id'] for m in preset.get('screen_monitors', [])]
         if monitor_id in existing_ids:
             self.print_error(f"Monitor ID '{monitor_id}' already exists")
             return
@@ -1376,7 +1378,8 @@ class ConfigMenu:
 
     def edit_screen_monitor(self):
         """Edit an existing screen monitor."""
-        monitors = self.config.get('screen_monitors', [])
+        preset = self.get_active_preset()
+        monitors = preset.get('screen_monitors', [])
 
         if not monitors:
             self.print_warning("No monitors to edit")
@@ -1543,7 +1546,8 @@ class ConfigMenu:
 
     def delete_screen_monitor(self):
         """Delete a screen monitor with confirmation."""
-        monitors = self.config.get('screen_monitors', [])
+        preset = self.get_active_preset()
+        monitors = preset.get('screen_monitors', [])
 
         if not monitors:
             self.print_warning("No monitors to delete")
@@ -1586,7 +1590,8 @@ class ConfigMenu:
 
     def reorder_screen_monitors(self):
         """Reorder screen monitors interactively."""
-        monitors = self.config.get('screen_monitors', [])
+        preset = self.get_active_preset()
+        monitors = preset.get('screen_monitors', [])
 
         if len(monitors) < 2:
             self.print_warning("Need at least 2 monitors to reorder")
@@ -1640,7 +1645,8 @@ class ConfigMenu:
         while True:
             self.print_menu_header("Static Shapes")
 
-            shapes = self.config.get('shapes', {}).get('static', [])
+            preset = self.get_active_preset()
+            shapes = preset.get('shapes', {}).get('static', [])
 
             # List all shapes
             if shapes:
@@ -1720,7 +1726,8 @@ class ConfigMenu:
 
     def edit_static_shape(self):
         """Edit an existing static shape."""
-        shapes = self.config.get('shapes', {}).get('static', [])
+        preset = self.get_active_preset()
+        shapes = preset.get('shapes', {}).get('static', [])
         if not shapes:
             return
 
@@ -1757,7 +1764,8 @@ class ConfigMenu:
 
     def delete_static_shape(self):
         """Delete a static shape with confirmation."""
-        shapes = self.config.get('shapes', {}).get('static', [])
+        preset = self.get_active_preset()
+        shapes = preset.get('shapes', {}).get('static', [])
         if not shapes:
             return
 
@@ -1796,7 +1804,8 @@ class ConfigMenu:
 
     def reorder_static_shapes(self):
         """Reorder static shapes interactively."""
-        shapes = self.config.get('shapes', {}).get('static', [])
+        preset = self.get_active_preset()
+        shapes = preset.get('shapes', {}).get('static', [])
         if len(shapes) < 2:
             self.print_warning("Need at least 2 shapes to reorder")
             return
@@ -1846,7 +1855,8 @@ class ConfigMenu:
         while True:
             self.print_menu_header("Animated Shapes")
 
-            shapes = self.config.get('shapes', {}).get('animated', [])
+            preset = self.get_active_preset()
+            shapes = preset.get('shapes', {}).get('animated', [])
 
             # List all shapes
             if shapes:
@@ -1923,7 +1933,8 @@ class ConfigMenu:
 
     def edit_animated_shape(self):
         """Edit an existing animated shape."""
-        shapes = self.config.get('shapes', {}).get('animated', [])
+        preset = self.get_active_preset()
+        shapes = preset.get('shapes', {}).get('animated', [])
         if not shapes:
             return
 
@@ -1960,7 +1971,8 @@ class ConfigMenu:
 
     def delete_animated_shape(self):
         """Delete an animated shape with confirmation."""
-        shapes = self.config.get('shapes', {}).get('animated', [])
+        preset = self.get_active_preset()
+        shapes = preset.get('shapes', {}).get('animated', [])
         if not shapes:
             return
 
@@ -1999,7 +2011,8 @@ class ConfigMenu:
 
     def reorder_animated_shapes(self):
         """Reorder animated shapes interactively."""
-        shapes = self.config.get('shapes', {}).get('animated', [])
+        preset = self.get_active_preset()
+        shapes = preset.get('shapes', {}).get('animated', [])
         if len(shapes) < 2:
             self.print_warning("Need at least 2 shapes to reorder")
             return
@@ -2168,9 +2181,10 @@ class ConfigMenu:
                 # Show summary
                 print()
                 print(f"{Fore.CYAN}Configuration Summary:{Style.RESET_ALL}\n")
-                print(f"  Screen Monitors: {len(self.config.get('screen_monitors', []))}")
-                print(f"  Static Shapes: {len(self.config.get('shapes', {}).get('static', []))}")
-                print(f"  Animated Shapes: {len(self.config.get('shapes', {}).get('animated', []))}")
+                preset = self.get_active_preset()
+                print(f"  Screen Monitors: {len(preset.get('screen_monitors', []))}")
+                print(f"  Static Shapes: {len(preset.get('shapes', {}).get('static', []))}")
+                print(f"  Animated Shapes: {len(preset.get('shapes', {}).get('animated', []))}")
                 print(f"  MIDI Port: {self.config.get('general', {}).get('midi_port', 'N/A')}")
                 print(f"  Monitor FPS: {self.config.get('general', {}).get('screen_monitor_fps', 30)}")
 
@@ -2195,7 +2209,8 @@ class ConfigMenu:
         """Live preview of screen monitors showing current colors."""
         self.print_header("Live Preview Monitors")
 
-        monitors = self.config.get('screen_monitors', [])
+        preset = self.get_active_preset()
+        monitors = preset.get('screen_monitors', [])
 
         if not monitors:
             self.print_warning("No monitors configured")
