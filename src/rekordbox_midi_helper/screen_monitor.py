@@ -156,9 +156,9 @@ class ScreenMonitor(Thread):
             img = np.array(screenshot)
 
             # MSS returns BGRA, convert to RGB
-            # Get single pixel color (no averaging needed)
-            # Format: img[y, x, channel] but for 1x1 it's img[0, 0, channel]
-            rgb_color = (img[0, 0, 2], img[0, 0, 1], img[0, 0, 0])  # BGR to RGB
+            # CRITICAL: Convert numpy.uint8 to Python int to avoid overflow in comparisons
+            # img[0, 0, 2] is numpy.uint8, which causes overflow when subtracted
+            rgb_color = (int(img[0, 0, 2]), int(img[0, 0, 1]), int(img[0, 0, 0]))  # BGR to RGB
 
             return rgb_color
 
@@ -183,11 +183,11 @@ class ScreenMonitor(Thread):
             'midi_config': midi_output
         }
 
-        # DEBUG: Always print when queueing MIDI events
-        print(f"[DEBUG] Queueing MIDI for {monitor_id}: matched={is_matched}, "
-              f"type={midi_output['type']}, channel={midi_output['channel']}")
-
         self.midi_output_queue.put(event)
+
+        if self.debug:
+            print(f"[ScreenMonitor] Queued MIDI for {monitor_id}: matched={is_matched}, "
+                  f"type={midi_output['type']}, channel={midi_output['channel']}")
 
     def get_current_states(self) -> Dict[str, bool]:
         """

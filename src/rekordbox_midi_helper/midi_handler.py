@@ -204,11 +204,6 @@ class MIDIHandler:
         """
         midi_config = event['midi_config']
         is_matched = event['matched']
-        monitor_id = event.get('monitor_id', 'unknown')
-
-        # DEBUG: Always print when processing events
-        print(f"[DEBUG] Processing event from {monitor_id}: matched={is_matched}, "
-              f"type={midi_config['type']}, channel={midi_config['channel']}")
 
         # Build MIDI message based on type
         if midi_config['type'] == 'note':
@@ -223,10 +218,6 @@ class MIDIHandler:
                 velocity = midi_config.get('velocity_off', 0)
                 message = create_note_off(channel, note, velocity)
 
-            # DEBUG: Print created message
-            print(f"[DEBUG] Created Note {'On' if is_matched else 'Off'}: "
-                  f"channel={channel}, note={note}, velocity={velocity if is_matched else velocity}")
-
         elif midi_config['type'] == 'cc':
             # Control Change message
             channel = midi_config['channel']
@@ -239,15 +230,12 @@ class MIDIHandler:
 
             message = create_cc(channel, controller, value)
 
-            # DEBUG: Print created message
-            print(f"[DEBUG] Created CC: channel={channel}, controller={controller}, value={value}")
-
         else:
-            print(f"[DEBUG] ERROR: Unknown MIDI type: {midi_config['type']}")
+            if self.debug:
+                print(f"[MIDI] Unknown MIDI type: {midi_config['type']}")
             return
 
         # Queue message for sending
-        print(f"[DEBUG] Queueing message for send: {message}")
         self.send_queue.put(message)
 
     def _output_worker(self):
@@ -281,11 +269,7 @@ class MIDIHandler:
         Args:
             message: MIDI message as list of integers (status byte + data)
         """
-        # DEBUG: Always print message being sent
-        print(f"[DEBUG] Sending raw MIDI: {[hex(b) for b in message]}")
-
         if self.midi_out is None:
-            print("[DEBUG] ERROR: midi_out is None!")
             return
 
         try:
@@ -293,8 +277,6 @@ class MIDIHandler:
             status = message[0]
             msg_type = (status & 0xF0) >> 4
             channel = (status & 0x0F)
-
-            print(f"[DEBUG] Parsed: msg_type={hex(msg_type)}, channel={channel}")
 
             if msg_type == 0x9:  # Note On
                 msg = mido.Message('note_on',
@@ -312,19 +294,20 @@ class MIDIHandler:
                                   value=message[2],
                                   channel=channel)
             else:
-                print(f"[DEBUG] ERROR: Unknown message type: {hex(msg_type)}")
+                if self.debug:
+                    print(f"[MIDI] Unknown message type: {hex(msg_type)}")
                 return
 
             # Send via mido
-            print(f"[DEBUG] Calling midi_out.send() with: {msg}")
             self.midi_out.send(msg)
-            print(f"[DEBUG] Successfully sent!")
 
-            msg_type_str, channel_num, data1, data2 = parse_midi_message(message)
-            print(f"[DEBUG] Sent: {msg_type_str} CH{channel_num} D1:{data1} D2:{data2}")
+            if self.debug:
+                msg_type_str, channel_num, data1, data2 = parse_midi_message(message)
+                print(f"[MIDI] Sent: {msg_type_str} CH{channel_num} D1:{data1} D2:{data2}")
 
         except Exception as e:
-            print(f"[DEBUG] ERROR sending message: {e}")
+            if self.debug:
+                print(f"[MIDI] Error sending message: {e}")
 
     def _input_worker(self):
         """
