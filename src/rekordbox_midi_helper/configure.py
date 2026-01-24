@@ -938,10 +938,11 @@ class ConfigMenu:
         """
         self.print_menu_header("Rekordbox MIDI Helper Config", show_breadcrumb=False)
 
-        # Count items for display
-        monitor_count = len(self.config.get('screen_monitors', []))
-        static_count = len(self.config.get('shapes', {}).get('static', []))
-        animated_count = len(self.config.get('shapes', {}).get('animated', []))
+        # Count items from active preset
+        preset = self.get_active_preset()
+        monitor_count = len(preset.get('screen_monitors', []))
+        static_count = len(preset.get('shapes', {}).get('static', []))
+        animated_count = len(preset.get('shapes', {}).get('animated', []))
 
         # Display menu options
         print(f"1. General Settings")
@@ -951,6 +952,7 @@ class ConfigMenu:
         print(f"5. Test & Validate")
         print(f"6. Save Configuration")
         print(f"7. Load Configuration")
+        print(f"8. Manage Presets")
         print(f"q. Exit")
 
         # Show status bar
@@ -958,7 +960,7 @@ class ConfigMenu:
 
         # Get choice
         print()
-        choice = input(f"Enter choice (1-7, q, s to save): ").strip().lower()
+        choice = input(f"Enter choice (1-8, q, s to save): ").strip().lower()
 
         # Handle choice
         if choice == 's':
@@ -977,6 +979,8 @@ class ConfigMenu:
             self.menu_save_config()
         elif choice == '7':
             self.menu_load_config()
+        elif choice == '8':
+            self.menu_manage_presets()
         elif choice == 'q':
             if self.confirm_exit():
                 return 'exit'
@@ -2276,6 +2280,295 @@ class ConfigMenu:
         input("Press Enter to return...")
 
         self.menu_stack.pop()
+
+    def menu_manage_presets(self):
+        """Manage configuration presets."""
+        self.menu_stack.append("Manage Presets")
+
+        while True:
+            self.print_menu_header("Manage Presets")
+
+            # Show current preset
+            active_preset = self.get_active_preset_name()
+            preset_names = self.get_preset_names()
+            preset_count = len(preset_names)
+
+            print(f"{Fore.CYAN}[Current Preset]{Style.RESET_ALL}\n")
+            print(f"  Active: {Fore.GREEN}{active_preset}{Style.RESET_ALL}")
+            print()
+
+            print(f"{Fore.CYAN}[Available Presets ({preset_count})]{Style.RESET_ALL}\n")
+            for i, name in enumerate(preset_names, 1):
+                marker = f" {Fore.GREEN}(active){Style.RESET_ALL}" if name == active_preset else ""
+                print(f"  {i}. {name}{marker}")
+
+            print()
+            print(f"{Fore.CYAN}[Actions]{Style.RESET_ALL}\n")
+            print("  s. Switch preset")
+            print("  n. Create new preset")
+            print("  c. Copy preset")
+            print("  d. Delete preset")
+            print("  r. Rename preset")
+            print("  b. Back to Main Menu")
+
+            self.print_status_bar()
+
+            print()
+            choice = input("Enter choice: ").strip().lower()
+
+            if choice == 'b':
+                break
+            elif choice == 's':
+                self.switch_preset()
+            elif choice == 'n':
+                self.create_preset()
+            elif choice == 'c':
+                self.copy_preset()
+            elif choice == 'd':
+                self.delete_preset()
+            elif choice == 'r':
+                self.rename_preset()
+            else:
+                self.print_warning("Invalid choice")
+
+        self.menu_stack.pop()
+
+    def switch_preset(self):
+        """Switch to a different preset."""
+        print()
+        print(f"{Fore.CYAN}Switch Preset{Style.RESET_ALL}\n")
+
+        preset_names = self.get_preset_names()
+        active_preset = self.get_active_preset_name()
+
+        for i, name in enumerate(preset_names, 1):
+            marker = " (current)" if name == active_preset else ""
+            print(f"  {i}. {name}{marker}")
+
+        print()
+        choice = input("Enter preset number (or Enter to cancel): ").strip()
+
+        if not choice:
+            return
+
+        try:
+            index = int(choice) - 1
+            if 0 <= index < len(preset_names):
+                new_preset = preset_names[index]
+                self.set_active_preset(new_preset)
+                self.print_success(f"Switched to preset '{new_preset}'")
+                print()
+                input("Press Enter to continue...")
+            else:
+                self.print_error("Invalid preset number")
+        except ValueError:
+            self.print_error("Invalid input")
+
+    def create_preset(self):
+        """Create a new preset."""
+        print()
+        print(f"{Fore.CYAN}Create New Preset{Style.RESET_ALL}\n")
+
+        name = input("Enter preset name: ").strip()
+
+        if not name:
+            self.print_error("Preset name cannot be empty")
+            return
+
+        if name in self.get_preset_names():
+            self.print_error(f"Preset '{name}' already exists")
+            return
+
+        # Create empty preset
+        self.config['presets'][name] = {
+            'screen_monitors': [],
+            'shapes': {
+                'static': [],
+                'animated': []
+            }
+        }
+        self.mark_unsaved()
+
+        self.print_success(f"Preset '{name}' created")
+
+        # Ask if they want to switch to it
+        if self.get_yes_no("Switch to new preset?", True):
+            self.set_active_preset(name)
+            self.print_success(f"Switched to preset '{name}'")
+
+        print()
+        input("Press Enter to continue...")
+
+    def copy_preset(self):
+        """Copy an existing preset."""
+        print()
+        print(f"{Fore.CYAN}Copy Preset{Style.RESET_ALL}\n")
+
+        preset_names = self.get_preset_names()
+
+        # Select source preset
+        print("Select preset to copy:\n")
+        for i, name in enumerate(preset_names, 1):
+            print(f"  {i}. {name}")
+
+        print()
+        choice = input("Enter preset number (or Enter to cancel): ").strip()
+
+        if not choice:
+            return
+
+        try:
+            index = int(choice) - 1
+            if 0 <= index < len(preset_names):
+                source_name = preset_names[index]
+            else:
+                self.print_error("Invalid preset number")
+                return
+        except ValueError:
+            self.print_error("Invalid input")
+            return
+
+        # Get new name
+        print()
+        new_name = input(f"Enter name for copy of '{source_name}': ").strip()
+
+        if not new_name:
+            self.print_error("Preset name cannot be empty")
+            return
+
+        if new_name in self.get_preset_names():
+            self.print_error(f"Preset '{new_name}' already exists")
+            return
+
+        # Copy preset
+        import copy
+        self.config['presets'][new_name] = copy.deepcopy(self.config['presets'][source_name])
+        self.mark_unsaved()
+
+        self.print_success(f"Preset '{source_name}' copied to '{new_name}'")
+
+        # Ask if they want to switch to it
+        if self.get_yes_no("Switch to new preset?", True):
+            self.set_active_preset(new_name)
+            self.print_success(f"Switched to preset '{new_name}'")
+
+        print()
+        input("Press Enter to continue...")
+
+    def delete_preset(self):
+        """Delete a preset."""
+        print()
+        print(f"{Fore.CYAN}Delete Preset{Style.RESET_ALL}\n")
+
+        preset_names = self.get_preset_names()
+
+        if len(preset_names) == 1:
+            self.print_error("Cannot delete the last preset")
+            print()
+            input("Press Enter to continue...")
+            return
+
+        active_preset = self.get_active_preset_name()
+
+        # Select preset to delete
+        print("Select preset to delete:\n")
+        for i, name in enumerate(preset_names, 1):
+            marker = " (current)" if name == active_preset else ""
+            print(f"  {i}. {name}{marker}")
+
+        print()
+        choice = input("Enter preset number (or Enter to cancel): ").strip()
+
+        if not choice:
+            return
+
+        try:
+            index = int(choice) - 1
+            if 0 <= index < len(preset_names):
+                delete_name = preset_names[index]
+            else:
+                self.print_error("Invalid preset number")
+                return
+        except ValueError:
+            self.print_error("Invalid input")
+            return
+
+        # Confirm deletion
+        if not self.get_yes_no(f"Delete preset '{delete_name}'? This cannot be undone.", False):
+            return
+
+        # If deleting active preset, switch to another one first
+        if delete_name == active_preset:
+            # Find another preset to switch to
+            remaining = [name for name in preset_names if name != delete_name]
+            if remaining:
+                self.set_active_preset(remaining[0])
+                self.print_info(f"Switched to preset '{remaining[0]}'")
+
+        # Delete preset
+        del self.config['presets'][delete_name]
+        self.mark_unsaved()
+
+        self.print_success(f"Preset '{delete_name}' deleted")
+        print()
+        input("Press Enter to continue...")
+
+    def rename_preset(self):
+        """Rename a preset."""
+        print()
+        print(f"{Fore.CYAN}Rename Preset{Style.RESET_ALL}\n")
+
+        preset_names = self.get_preset_names()
+        active_preset = self.get_active_preset_name()
+
+        # Select preset to rename
+        print("Select preset to rename:\n")
+        for i, name in enumerate(preset_names, 1):
+            marker = " (current)" if name == active_preset else ""
+            print(f"  {i}. {name}{marker}")
+
+        print()
+        choice = input("Enter preset number (or Enter to cancel): ").strip()
+
+        if not choice:
+            return
+
+        try:
+            index = int(choice) - 1
+            if 0 <= index < len(preset_names):
+                old_name = preset_names[index]
+            else:
+                self.print_error("Invalid preset number")
+                return
+        except ValueError:
+            self.print_error("Invalid input")
+            return
+
+        # Get new name
+        print()
+        new_name = input(f"Enter new name for '{old_name}': ").strip()
+
+        if not new_name:
+            self.print_error("Preset name cannot be empty")
+            return
+
+        if new_name in self.get_preset_names():
+            self.print_error(f"Preset '{new_name}' already exists")
+            return
+
+        # Rename preset
+        self.config['presets'][new_name] = self.config['presets'][old_name]
+        del self.config['presets'][old_name]
+
+        # Update active preset if needed
+        if old_name == active_preset:
+            self.config['general']['active_preset'] = new_name
+
+        self.mark_unsaved()
+
+        self.print_success(f"Preset renamed from '{old_name}' to '{new_name}'")
+        print()
+        input("Press Enter to continue...")
 
 
 def main():
