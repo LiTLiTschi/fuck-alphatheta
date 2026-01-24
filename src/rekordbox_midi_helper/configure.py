@@ -58,7 +58,7 @@ class ConfigMenu:
         Initialize configuration menu.
 
         Args:
-            config_path: Path to save/load configuration file (defaults to ~/.fucka/config.yaml)
+            config_path: Path to save/load configuration file (defaults to ~/.config/fucka/config.yaml)
         """
         self.config_path = config_path if config_path else str(get_config_path())
 

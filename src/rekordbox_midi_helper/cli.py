@@ -31,9 +31,9 @@ from colorama import init, Fore, Style
 # Initialize colorama
 init(autoreset=True)
 
-# PID file location
-PID_FILE = Path.home() / ".fucka" / "fucka.pid"
-LOG_FILE = Path.home() / ".fucka" / "fucka.log"
+# PID and log file location
+PID_FILE = Path.home() / ".config" / "fucka" / "fucka.pid"
+LOG_FILE = Path.home() / ".config" / "fucka" / "fucka.log"
 
 
 def print_info(text: str):
@@ -57,9 +57,9 @@ def print_warning(text: str):
 
 
 def ensure_fucka_dir():
-    """Ensure ~/.fucka directory exists."""
-    fucka_dir = Path.home() / ".fucka"
-    fucka_dir.mkdir(exist_ok=True)
+    """Ensure ~/.config/fucka directory exists."""
+    fucka_dir = Path.home() / ".config" / "fucka"
+    fucka_dir.mkdir(parents=True, exist_ok=True)
     return fucka_dir
 
 
@@ -118,7 +118,7 @@ def cmd_config(args):
     print_info("Starting configuration menu...")
     print()
 
-    # Use ~/.fucka/config.yaml (or custom path if provided)
+    # Use ~/.config/fucka/config.yaml (or custom path if provided)
     if hasattr(args, 'config') and args.config:
         config_path = args.config
     else:
@@ -145,7 +145,7 @@ def cmd_start(args):
         print_info(f"Use 'fucka stop' to stop it first")
         sys.exit(1)
 
-    # Use ~/.fucka/config.yaml (or custom path if provided)
+    # Use ~/.config/fucka/config.yaml (or custom path if provided)
     if hasattr(args, 'config') and args.config:
         config_path = args.config
     else:

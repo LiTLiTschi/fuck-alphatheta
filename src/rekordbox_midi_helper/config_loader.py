@@ -44,7 +44,7 @@ class ConfigLoader:
         Initialize configuration loader.
 
         Args:
-            config_path: Optional path to YAML configuration file. If None, uses ~/.fucka/config.yaml
+            config_path: Optional path to YAML configuration file. If None, uses ~/.config/fucka/config.yaml
 
         Raises:
             FileNotFoundError: If config file doesn't exist
@@ -53,7 +53,7 @@ class ConfigLoader:
         if config_path:
             self.config_path = config_path
         else:
-            # Use default location: ~/.fucka/config.yaml
+            # Use default location: ~/.config/fucka/config.yaml
             self.config_path = str(ensure_config_exists())
 
         self.config = self._load_config()

@@ -11,9 +11,9 @@ def get_config_dir() -> Path:
     Get the configuration directory path.
 
     Returns:
-        Path to ~/.fucka/ directory
+        Path to ~/.config/fucka/ directory
     """
-    return Path.home() / '.fucka'
+    return Path.home() / '.config' / 'fucka'
 
 
 def get_config_path() -> Path:
@@ -21,7 +21,7 @@ def get_config_path() -> Path:
     Get the configuration file path.
 
     Returns:
-        Path to ~/.fucka/config.yaml
+        Path to ~/.config/fucka/config.yaml
     """
     return get_config_dir() / 'config.yaml'
 
@@ -43,7 +43,7 @@ def get_default_config_template() -> Path:
 
 def ensure_config_dir() -> Path:
     """
-    Ensure ~/.fucka/ directory exists.
+    Ensure ~/.config/fucka/ directory exists.
 
     Creates directory if it doesn't exist.
 
@@ -57,7 +57,7 @@ def ensure_config_dir() -> Path:
 
 def ensure_config_exists() -> Path:
     """
-    Ensure config file exists at ~/.fucka/config.yaml.
+    Ensure config file exists at ~/.config/fucka/config.yaml.
 
     If it doesn't exist, copy from default template.
 
@@ -84,12 +84,14 @@ general:
   midi_port: "loopMIDI Port"
   screen_monitor_fps: 30
   debug_mode: false
+  active_preset: "default"
 
-screen_monitors: []
-
-shapes:
-  static: []
-  animated: []
+presets:
+  default:
+    screen_monitors: []
+    shapes:
+      static: []
+      animated: []
 """
             config_path.write_text(minimal_config)
             print(f"Created minimal configuration at: {config_path}")
