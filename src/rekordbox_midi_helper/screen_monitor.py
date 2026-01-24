@@ -183,6 +183,10 @@ class ScreenMonitor(Thread):
             'midi_config': midi_output
         }
 
+        # DEBUG: Always print when queueing MIDI events
+        print(f"[DEBUG] Queueing MIDI for {monitor_id}: matched={is_matched}, "
+              f"type={midi_output['type']}, channel={midi_output['channel']}")
+
         self.midi_output_queue.put(event)
 
     def get_current_states(self) -> Dict[str, bool]:
