@@ -1,12 +1,12 @@
 # Rekordbox MIDI Helper - Default Configuration
 #
-# Copy this file to config.yaml and customize for your setup.
-# All coordinates are in pixels from the top-left corner of your screen.
+# This file supports multiple presets - switch between different configurations easily!
 #
 # IMPORTANT: To use this application:
-# 1. Copy this file to config.yaml
-# 2. Edit config.yaml with your specific screen regions and MIDI mappings
-# 3. Run the application: python src/main.py
+# 1. Run: fucka config
+# 2. Configure your MIDI port, monitors, and shapes
+# 3. Create additional presets for different use cases
+# 4. Switch between presets in the config menu
 
 general:
   # MIDI Port Configuration (Windows with loopMIDI)
@@ -23,166 +23,28 @@ general:
   # Enable debug logging to console
   debug_mode: false
 
-# Screen monitoring configuration
-# Each monitor watches a specific pixel position for color changes
-# When the color matches the target (within tolerance), a MIDI message is sent
-screen_monitors:
-  # Example: Monitor Deck A play button
-  - id: "deck_a_playing"
+  # Active preset (which configuration to use)
+  # You can create multiple presets and switch between them in the config menu
+  active_preset: "default"
 
-    # Single pixel position to monitor (pixels from top-left)
-    # NOTE: Monitors exactly ONE pixel for optimal performance
-    position:
-      x: 100        # X coordinate
-      y: 200        # Y coordinate
-
-    # Target color to detect (RGB values 0-255)
-    target_color:
-      r: 255        # Red component
-      g: 0          # Green component
-      b: 0          # Blue component
-
-    # Color matching tolerance (0-255)
-    # Higher = less strict matching
-    # Recommended: 10-20 for solid colors, 30-50 for gradients
-    tolerance: 10
-
-    # MIDI message to send when color matches
-    midi_output:
-      type: "note"          # "note" for Note On/Off, "cc" for Control Change
-      channel: 1            # MIDI channel (1-16)
-      note: 60              # Note number (0-127) - only for type "note"
-      velocity_on: 127      # Velocity when color matches (0-127)
-      velocity_off: 0       # Velocity when color doesn't match (0-127)
-
-  # Example: Monitor Deck B cue point with CC message
-  - id: "deck_b_cue"
-    position:
-      x: 500
-      y: 200
-    target_color:
-      r: 0
-      g: 255
-      b: 0
-    tolerance: 15
-    midi_output:
-      type: "cc"            # Control Change message
-      channel: 1
-      controller: 20        # CC controller number (0-127)
-      value_match: 127      # Value when color matches
-      value_nomatch: 0      # Value when color doesn't match
-
-# Overlay shapes configuration
-# Shapes are drawn on top of Rekordbox in a transparent window
-shapes:
-  # Static shapes: Triggered by MIDI Note On/Off messages
-  # They appear when the note is on, disappear when off
-  static:
-    # Example: Circle indicator for Deck A
-    - id: "deck_a_indicator"
-      type: "circle"        # Shape type: "circle" or "rectangle"
-
-      # Position on screen (pixels from top-left)
-      position:
-        x: 100
-        y: 100
-
-      # Shape size
-      size:
-        radius: 30          # For circles: radius in pixels
-        # For rectangles, use width/height instead:
-        # width: 60
-        # height: 60
-
-      # Shape color (RGBA: 0-255)
-      color:
-        r: 255
-        g: 0
-        b: 0
-        a: 200              # Alpha/opacity: 0=transparent, 255=solid
-
-      # MIDI trigger for this shape
-      trigger_midi:
-        type: "note"
-        channel: 1
-        note: 60            # When this note is on, shape appears
-
-    # Example: Rectangle indicator for Deck B
-    - id: "deck_b_indicator"
-      type: "rectangle"
-      position:
-        x: 500
-        y: 100
-      size:
-        width: 60
-        height: 60
-      color:
-        r: 0
-        g: 255
-        b: 0
-        a: 200
-      trigger_midi:
-        type: "note"
-        channel: 1
-        note: 61
-
-  # Animated shapes: Controlled by MIDI CC messages
-  # The shape changes dynamically based on the CC value (0-127)
-  animated:
-    # Example: Crossfader pie chart
-    # CC 0 = empty circle (0° to 0°)
-    # CC 127 = full circle (0° to 360°)
-    - id: "crossfader_pie"
-      type: "pie_chart"     # Pie chart that fills based on CC value
-
-      position:
-        x: 500
-        y: 300
-
-      size:
-        radius: 50
-
-      color:
-        r: 0
-        g: 150
-        b: 255
-        a: 180
-
-      # MIDI CC that controls this shape
-      control_midi:
-        type: "cc"
-        channel: 1
-        controller: 10      # CC number to listen for
-
-      # Animation parameters
-      animation:
-        start_angle: 0              # Starting angle in degrees (0 = top)
-        end_angle_range: [0, 360]   # CC 0 maps to 0°, CC 127 maps to 360°
-        fill_direction: "clockwise" # "clockwise" or "counterclockwise"
-
-    # Example: Volume meter as horizontal progress bar
-    - id: "volume_meter"
-      type: "progress_bar"
-      position:
-        x: 100
-        y: 500
-      size:
-        width: 200
-        height: 20
-      color:
-        r: 255
-        g: 100
-        b: 0
-        a: 200
-      control_midi:
-        type: "cc"
-        channel: 1
-        controller: 11
-      animation:
-        direction: "horizontal"     # "horizontal" or "vertical"
-        fill_direction: "left_to_right"  # or "right_to_left", "top_to_bottom", "bottom_to_top"
+# Presets - Multiple configurations you can switch between
+# Each preset has its own screen monitors and shapes
+# Useful for different scenarios (e.g., "deck_a_only", "both_decks", "effects_mode")
+presets:
+  # Default preset
+  default:
+    screen_monitors: []
+    
+    shapes:
+      static: []
+      animated: []
 
 # Tips for configuration:
+#
+# Creating presets:
+# - Use fucka config > Manage Presets to create/switch/copy presets
+# - Each preset can have completely different monitors and shapes
+# - Switch presets without restarting the application
 #
 # Finding screen coordinates:
 # - Use the interactive configuration wizard: fucka config

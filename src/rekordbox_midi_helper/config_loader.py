@@ -96,30 +96,50 @@ class ConfigLoader:
         if 'midi_port' not in general:
             raise ConfigValidationError("Missing 'midi_port' in general section")
 
-        # Validate screen_monitors section (optional but if present, validate structure)
-        if 'screen_monitors' in self.config:
-            if not isinstance(self.config['screen_monitors'], list):
-                raise ConfigValidationError("'screen_monitors' must be a list")
+        # Validate presets section
+        if 'presets' not in self.config:
+            raise ConfigValidationError("Missing 'presets' section in config")
 
-            for i, monitor in enumerate(self.config['screen_monitors']):
-                self._validate_screen_monitor(monitor, i)
+        if not isinstance(self.config['presets'], dict):
+            raise ConfigValidationError("'presets' must be a dictionary")
 
-        # Validate shapes section (optional but if present, validate structure)
-        if 'shapes' in self.config:
-            if not isinstance(self.config['shapes'], dict):
-                raise ConfigValidationError("'shapes' must be a dictionary")
+        if not self.config['presets']:
+            raise ConfigValidationError("'presets' must contain at least one preset")
 
-            if 'static' in self.config['shapes']:
-                if not isinstance(self.config['shapes']['static'], list):
-                    raise ConfigValidationError("'shapes.static' must be a list")
-                for i, shape in enumerate(self.config['shapes']['static']):
-                    self._validate_static_shape(shape, i)
+        # Validate each preset
+        for preset_name, preset in self.config['presets'].items():
+            if not isinstance(preset, dict):
+                raise ConfigValidationError(f"Preset '{preset_name}' must be a dictionary")
 
-            if 'animated' in self.config['shapes']:
-                if not isinstance(self.config['shapes']['animated'], list):
-                    raise ConfigValidationError("'shapes.animated' must be a list")
-                for i, shape in enumerate(self.config['shapes']['animated']):
-                    self._validate_animated_shape(shape, i)
+            # Validate screen_monitors in preset (optional)
+            if 'screen_monitors' in preset:
+                if not isinstance(preset['screen_monitors'], list):
+                    raise ConfigValidationError(f"Preset '{preset_name}': 'screen_monitors' must be a list")
+
+                for i, monitor in enumerate(preset['screen_monitors']):
+                    self._validate_screen_monitor(monitor, i)
+
+            # Validate shapes in preset (optional)
+            if 'shapes' in preset:
+                if not isinstance(preset['shapes'], dict):
+                    raise ConfigValidationError(f"Preset '{preset_name}': 'shapes' must be a dictionary")
+
+                if 'static' in preset['shapes']:
+                    if not isinstance(preset['shapes']['static'], list):
+                        raise ConfigValidationError(f"Preset '{preset_name}': 'shapes.static' must be a list")
+                    for i, shape in enumerate(preset['shapes']['static']):
+                        self._validate_static_shape(shape, i)
+
+                if 'animated' in preset['shapes']:
+                    if not isinstance(preset['shapes']['animated'], list):
+                        raise ConfigValidationError(f"Preset '{preset_name}': 'shapes.animated' must be a list")
+                    for i, shape in enumerate(preset['shapes']['animated']):
+                        self._validate_animated_shape(shape, i)
+
+        # Validate active_preset exists
+        active_preset = general.get('active_preset', 'default')
+        if active_preset not in self.config['presets']:
+            raise ConfigValidationError(f"Active preset '{active_preset}' does not exist in presets")
 
     def _validate_screen_monitor(self, monitor: Dict[str, Any], index: int):
         """Validate a single screen monitor configuration."""
@@ -231,35 +251,75 @@ class ConfigLoader:
         """
         return self.config['general'].get('debug_mode', False)
 
+    def get_active_preset_name(self) -> str:
+        """
+        Get the name of the currently active preset.
+
+        Returns:
+            Active preset name
+        """
+        return self.config.get('general', {}).get('active_preset', 'default')
+
+    def get_preset_names(self) -> List[str]:
+        """
+        Get list of all preset names.
+
+        Returns:
+            List of preset names
+        """
+        presets = self.config.get('presets', {})
+        return list(presets.keys())
+
+    def get_preset(self, preset_name: str) -> Dict[str, Any]:
+        """
+        Get a specific preset by name.
+
+        Args:
+            preset_name: Name of the preset
+
+        Returns:
+            Preset configuration dictionary
+        """
+        presets = self.config.get('presets', {})
+        return presets.get(preset_name, {'screen_monitors': [], 'shapes': {'static': [], 'animated': []}})
+
     def get_screen_monitors(self) -> List[Dict[str, Any]]:
         """
-        Get list of screen monitor configurations.
+        Get list of screen monitor configurations from active preset.
 
         Returns:
             List of screen monitor dictionaries
         """
-        return self.config.get('screen_monitors', [])
+        active_preset = self.get_active_preset_name()
+        preset = self.get_preset(active_preset)
+        return preset.get('screen_monitors', [])
 
     def get_shapes(self) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Get shape configurations.
+        Get shape configurations from active preset.
 
         Returns:
             Dictionary with 'static' and 'animated' lists of shapes
         """
-        shapes = self.config.get('shapes', {})
+        active_preset = self.get_active_preset_name()
+        preset = self.get_preset(active_preset)
+        shapes = preset.get('shapes', {})
         return {
             'static': shapes.get('static', []),
             'animated': shapes.get('animated', [])
         }
 
     def get_static_shapes(self) -> List[Dict[str, Any]]:
-        """Get list of static shape configurations."""
-        return self.config.get('shapes', {}).get('static', [])
+        """Get list of static shape configurations from active preset."""
+        active_preset = self.get_active_preset_name()
+        preset = self.get_preset(active_preset)
+        return preset.get('shapes', {}).get('static', [])
 
     def get_animated_shapes(self) -> List[Dict[str, Any]]:
-        """Get list of animated shape configurations."""
-        return self.config.get('shapes', {}).get('animated', [])
+        """Get list of animated shape configurations from active preset."""
+        active_preset = self.get_active_preset_name()
+        preset = self.get_preset(active_preset)
+        return preset.get('shapes', {}).get('animated', [])
 
     def reload(self):
         """

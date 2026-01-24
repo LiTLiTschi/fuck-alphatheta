@@ -84,19 +84,46 @@ class ConfigMenu:
         self.sct = mss.mss()
 
     def init_default_config(self):
-        """Initialize default configuration structure."""
+        """Initialize default configuration structure with presets."""
         self.config: Dict[str, Any] = {
             'general': {
                 'midi_port': 'loopMIDI Port',
                 'screen_monitor_fps': 30,
-                'debug_mode': False
+                'debug_mode': False,
+                'active_preset': 'default'
             },
-            'screen_monitors': [],
-            'shapes': {
-                'static': [],
-                'animated': []
+            'presets': {
+                'default': {
+                    'screen_monitors': [],
+                    'shapes': {
+                        'static': [],
+                        'animated': []
+                    }
+                }
             }
         }
+
+    def get_active_preset_name(self) -> str:
+        """Get the name of the currently active preset."""
+        return self.config.get('general', {}).get('active_preset', 'default')
+
+    def get_active_preset(self) -> Dict[str, Any]:
+        """Get the currently active preset configuration."""
+        preset_name = self.get_active_preset_name()
+        return self.config.get('presets', {}).get(preset_name, {
+            'screen_monitors': [],
+            'shapes': {'static': [], 'animated': []}
+        })
+
+    def get_preset_names(self) -> List[str]:
+        """Get list of all preset names."""
+        return list(self.config.get('presets', {}).keys())
+
+    def set_active_preset(self, preset_name: str):
+        """Set the active preset."""
+        if preset_name in self.get_preset_names():
+            self.config['general']['active_preset'] = preset_name
+            self.has_unsaved_changes = True
 
     def load_config(self, path: Optional[str] = None):
         """
@@ -163,7 +190,7 @@ class ConfigMenu:
         return "Main Menu > " + " > ".join(self.menu_stack)
 
     def print_status_bar(self):
-        """Print status bar showing unsaved changes and item counts."""
+        """Print status bar showing unsaved changes, current preset, and item counts."""
         # Get terminal width
         try:
             width = shutil.get_terminal_size().columns
@@ -177,16 +204,21 @@ class ConfigMenu:
         else:
             status = f"{Fore.GREEN}All changes saved{Style.RESET_ALL}"
 
-        # Count items
-        monitor_count = len(self.config.get('screen_monitors', []))
-        static_count = len(self.config.get('shapes', {}).get('static', []))
-        animated_count = len(self.config.get('shapes', {}).get('animated', []))
+        # Get active preset
+        preset_name = self.get_active_preset_name()
+        preset = self.get_active_preset()
+
+        # Count items from active preset
+        monitor_count = len(preset.get('screen_monitors', []))
+        static_count = len(preset.get('shapes', {}).get('static', []))
+        animated_count = len(preset.get('shapes', {}).get('animated', []))
         total_shapes = static_count + animated_count
 
         # Format status line
+        preset_display = f"{Fore.CYAN}Preset: {preset_name}{Style.RESET_ALL}"
         counts = f"Monitors: {monitor_count} | Shapes: {total_shapes}"
 
-        status_line = f"[Status] {status} | {counts}"
+        status_line = f"[Status] {status} | {preset_display} | {counts}"
 
         # Print with padding
         print()
