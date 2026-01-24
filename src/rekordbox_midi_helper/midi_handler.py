@@ -68,6 +68,33 @@ class MIDIHandler:
         # Queue for messages to send out
         self.send_queue = ThreadSafeQueue()
 
+    def _find_matching_input_port(self, input_ports: List[str]) -> Optional[str]:
+        """
+        Find matching input port for the configured output port.
+
+        mido/rtmidi appends different index numbers to input/output ports,
+        so "loopMIDI Port 2" (output) might be "loopMIDI Port 1" (input).
+
+        Args:
+            input_ports: List of available input port names
+
+        Returns:
+            Matching input port name, or None if not found
+        """
+        # Strip trailing space + number from port name to get base name
+        # "loopMIDI Port 2" -> "loopMIDI Port"
+        import re
+        base_name = re.sub(r'\s+\d+$', '', self.port_name)
+
+        # Find input port that starts with the base name
+        for port in input_ports:
+            if port.startswith(base_name):
+                if self.debug:
+                    print(f"[MIDI] Matched input port: '{port}' for output port: '{self.port_name}'")
+                return port
+
+        return None
+
     def start(self):
         """
         Connect to loopMIDI port and start send/receive threads.
@@ -84,7 +111,7 @@ class MIDIHandler:
                 print(f"[MIDI] Available output ports: {output_ports}")
                 print(f"[MIDI] Available input ports: {input_ports}")
 
-            # Check if port exists
+            # Check if port exists in outputs
             if self.port_name not in output_ports:
                 raise ValueError(
                     f"MIDI port '{self.port_name}' not found.\n\n"
@@ -98,12 +125,23 @@ class MIDIHandler:
                     "6. Select your loopMIDI port from the list"
                 )
 
+            # Find matching input port (may have different index number than output)
+            # Example: "loopMIDI Port 2" (output) -> "loopMIDI Port 1" (input)
+            input_port_name = self._find_matching_input_port(input_ports)
+
+            if not input_port_name:
+                raise ValueError(
+                    f"No matching input port found for '{self.port_name}'.\n\n"
+                    f"Available input ports: {', '.join(input_ports) if input_ports else 'None'}\n\n"
+                    "Make sure loopMIDI is running and the port is created."
+                )
+
             # Connect to separate output and input ports
             self.midi_out = mido.open_output(self.port_name)
-            self.midi_in = mido.open_input(self.port_name)
+            self.midi_in = mido.open_input(input_port_name)
 
             if self.debug:
-                print(f"[MIDI] Connected to loopMIDI port: '{self.port_name}'")
+                print(f"[MIDI] Connected - Output: '{self.port_name}', Input: '{input_port_name}'")
 
             # Start output thread (sends MIDI from queue)
             self.output_thread = Thread(
