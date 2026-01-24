@@ -66,7 +66,7 @@ class RekordboxMIDIHelper:
                 print(f"[Main] Loaded configuration from {config_path}")
         except (FileNotFoundError, ConfigValidationError) as e:
             print(f"ERROR: Configuration failed: {e}")
-            print("\nPlease create config/config.yaml from config/default_config.yaml")
+            print("\nPlease run 'fucka config' to create a configuration file")
             sys.exit(1)
 
         # Threading components
@@ -299,10 +299,7 @@ For more information, see README.md
     if not os.path.exists(args.config):
         print(f"ERROR: Configuration file not found: {args.config}")
         print()
-        print("Please create a configuration file:")
-        print("  1. Copy config/default_config.yaml to config/config.yaml")
-        print("  2. Edit config/config.yaml with your settings")
-        print("  3. Run this script again")
+        print("Please run 'fucka config' to create a configuration file")
         sys.exit(1)
 
     # Create and run application

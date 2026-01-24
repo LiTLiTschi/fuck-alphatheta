@@ -2597,8 +2597,8 @@ def main():
     parser.add_argument(
         '--config',
         type=str,
-        default='config/config.yaml',
-        help='Path to save configuration file (default: config/config.yaml)'
+        default=None,
+        help='Path to save configuration file (default: ~/.config/fucka/config.yaml)'
     )
     parser.add_argument(
         '--edit',
@@ -2608,7 +2608,13 @@ def main():
 
     args = parser.parse_args()
 
-    config_path = args.edit if args.edit else args.config
+    # Use specified path or default
+    if args.edit:
+        config_path = args.edit
+    elif args.config:
+        config_path = args.config
+    else:
+        config_path = None  # ConfigMenu will use get_config_path()
 
     menu = ConfigMenu(config_path)
     menu.run()

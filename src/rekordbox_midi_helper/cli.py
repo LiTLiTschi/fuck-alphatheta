@@ -301,8 +301,13 @@ def cmd_status(args):
 def cmd_run(args):
     """Run the application in foreground (for debugging)."""
     from .main import RekordboxMIDIHelper
+    from .utils.config_path import get_config_path
 
-    config_path = args.config
+    # Use ~/.config/fucka/config.yaml (or custom path if provided)
+    if args.config:
+        config_path = args.config
+    else:
+        config_path = str(get_config_path())
 
     if not os.path.exists(config_path):
         print_error(f"Configuration file not found: {config_path}")
@@ -398,14 +403,14 @@ Examples:
 
     # Config command
     parser_config = subparsers.add_parser('config', help='Run interactive configuration wizard')
-    parser_config.add_argument('--config', type=str, default='config/config.yaml',
-                               help='Configuration file path')
+    parser_config.add_argument('--config', type=str, default=None,
+                               help='Configuration file path (default: ~/.config/fucka/config.yaml)')
     parser_config.set_defaults(func=cmd_config)
 
     # Start command
     parser_start = subparsers.add_parser('start', help='Start application in background')
-    parser_start.add_argument('--config', type=str, default='config/config.yaml',
-                              help='Configuration file path')
+    parser_start.add_argument('--config', type=str, default=None,
+                              help='Configuration file path (default: ~/.config/fucka/config.yaml)')
     parser_start.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser_start.set_defaults(func=cmd_start)
 
@@ -419,8 +424,8 @@ Examples:
 
     # Run command (foreground)
     parser_run = subparsers.add_parser('run', help='Run application in foreground')
-    parser_run.add_argument('--config', type=str, default='config/config.yaml',
-                            help='Configuration file path')
+    parser_run.add_argument('--config', type=str, default=None,
+                            help='Configuration file path (default: ~/.config/fucka/config.yaml)')
     parser_run.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser_run.set_defaults(func=cmd_run)
 

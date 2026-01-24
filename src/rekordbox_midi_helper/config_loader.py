@@ -3,14 +3,12 @@ Configuration loader for the Rekordbox MIDI Helper.
 
 Loads and validates YAML configuration files that define:
 - General application settings
+- Multiple presets with screen monitors and shapes
 - Screen monitoring pixel positions and MIDI output mappings
 - Overlay shapes (static and animated)
 
-Supports both 'position' (new single-pixel format) and 'region' (old format)
-for backward compatibility.
-
 Example usage:
-    config = ConfigLoader('config/config.yaml')
+    config = ConfigLoader('~/.config/fucka/config.yaml')
     monitors = config.get_screen_monitors()
     shapes = config.get_shapes()
 """
