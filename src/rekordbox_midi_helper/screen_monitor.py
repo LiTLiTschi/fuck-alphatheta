@@ -26,9 +26,6 @@ class ScreenMonitor(Thread):
     Captures specified pixels at configurable FPS and detects when
     the color matches configured targets. Sends MIDI events when state changes.
 
-    Supports both 'position' (new single-pixel format) and 'region' (old format)
-    for backward compatibility.
-
     Example:
         monitor = ScreenMonitor(monitors_config, midi_queue, shutdown_event, fps=30)
         monitor.start()
@@ -104,19 +101,7 @@ class ScreenMonitor(Thread):
             monitor_config: Configuration dictionary for this monitor
         """
         monitor_id = monitor_config['id']
-
-        # Support both 'position' (new) and 'region' (old) formats
-        if 'position' in monitor_config:
-            position = monitor_config['position']
-        elif 'region' in monitor_config:
-            # Backward compatibility: extract x,y from old region format
-            region = monitor_config['region']
-            position = {'x': region['x'], 'y': region['y']}
-        else:
-            if self.debug:
-                print(f"[ScreenMonitor] {monitor_id}: Missing position/region config")
-            return
-
+        position = monitor_config['position']
         target_color = monitor_config['target_color']
         tolerance = monitor_config['tolerance']
         midi_output = monitor_config['midi_output']
@@ -180,48 +165,6 @@ class ScreenMonitor(Thread):
         except Exception as e:
             if self.debug:
                 print(f"[ScreenMonitor] Error capturing pixel: {e}")
-            return None
-
-    def _capture_region_color(self, region: Dict[str, int]) -> Tuple[int, int, int]:
-        """
-        Capture a screen region and return its average color (DEPRECATED).
-
-        This method is kept for backward compatibility with old configs.
-        New code should use _capture_pixel_color instead.
-
-        Args:
-            region: Dictionary with x, y, width, height
-
-        Returns:
-            RGB tuple (r, g, b) or None if capture fails
-        """
-        try:
-            # Define monitor region for MSS
-            monitor_region = {
-                "left": region['x'],
-                "top": region['y'],
-                "width": region.get('width', 1),
-                "height": region.get('height', 1)
-            }
-
-            # Capture screen region
-            screenshot = self.sct.grab(monitor_region)
-
-            # Convert to numpy array (BGRA format from MSS)
-            img = np.array(screenshot)
-
-            # MSS returns BGRA, convert to RGB
-            # Note: MSS uses BGR order, so we need to swap B and R
-            rgb_img = img[:, :, [2, 1, 0]]  # BGR to RGB
-
-            # Get average color of region (reduces noise)
-            avg_color = average_region_color(rgb_img)
-
-            return avg_color
-
-        except Exception as e:
-            if self.debug:
-                print(f"[ScreenMonitor] Error capturing region: {e}")
             return None
 
     def _queue_midi_event(self, monitor_id: str, midi_output: Dict[str, Any], is_matched: bool):
