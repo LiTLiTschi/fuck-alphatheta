@@ -33,6 +33,7 @@ from .screen_monitor import ScreenMonitor
 from .midi_handler import MIDIHandler
 from .overlay_window import OverlayWindow
 from .utils.threading_utils import ThreadSafeQueue, ShutdownEvent
+from .utils.config_path import get_config_path
 
 
 class RekordboxMIDIHelper:
@@ -256,6 +257,9 @@ def main():
 
     Parses command line arguments and starts the application.
     """
+    # Get default config path
+    default_config = str(get_config_path())
+
     parser = argparse.ArgumentParser(
         description="Rekordbox MIDI Helper - Screen monitoring and overlay for DJ controllers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -272,8 +276,8 @@ For more information, see README.md
     parser.add_argument(
         '--config',
         type=str,
-        default='config/config.yaml',
-        help='Path to configuration file (default: config/config.yaml)'
+        default=default_config,
+        help=f'Path to configuration file (default: {default_config})'
     )
 
     parser.add_argument(
