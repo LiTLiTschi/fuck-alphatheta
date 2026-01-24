@@ -1358,11 +1358,12 @@ class ConfigMenu:
             'midi_output': midi_output
         }
 
-        # Add to config
-        if 'screen_monitors' not in self.config:
-            self.config['screen_monitors'] = []
+        # Add to active preset
+        preset = self.get_active_preset()
+        if 'screen_monitors' not in preset:
+            preset['screen_monitors'] = []
 
-        self.config['screen_monitors'].append(monitor_config)
+        preset['screen_monitors'].append(monitor_config)
         self.mark_unsaved()
 
         self.print_success(f"Monitor '{monitor_id}' added successfully!")
@@ -1617,7 +1618,7 @@ class ConfigMenu:
 
             # Reorder
             new_monitors = [monitors[i] for i in order]
-            self.config['screen_monitors'] = new_monitors
+            self.get_active_preset()['screen_monitors'] = new_monitors
             self.mark_unsaved()
 
             self.print_success("Monitors reordered!")
@@ -1690,11 +1691,12 @@ class ConfigMenu:
                 return
             elif choice == str(next_num):
                 shape_config = self.configure_static_shape()
-                if 'shapes' not in self.config:
-                    self.config['shapes'] = {}
-                if 'static' not in self.config['shapes']:
-                    self.config['shapes']['static'] = []
-                self.config['shapes']['static'].append(shape_config)
+                preset = self.get_active_preset()
+                if 'shapes' not in preset:
+                    preset['shapes'] = {}
+                if 'static' not in preset['shapes']:
+                    preset['shapes']['static'] = []
+                preset['shapes']['static'].append(shape_config)
                 self.mark_unsaved()
                 print()
                 input("Press Enter to continue...")
@@ -1822,7 +1824,7 @@ class ConfigMenu:
                 return
 
             new_shapes = [shapes[i] for i in order]
-            self.config['shapes']['static'] = new_shapes
+            self.get_active_preset()['shapes']['static'] = new_shapes
             self.mark_unsaved()
 
             self.print_success("Shapes reordered!")
@@ -1892,11 +1894,12 @@ class ConfigMenu:
                 return
             elif choice == str(next_num):
                 shape_config = self.configure_animated_shape()
-                if 'shapes' not in self.config:
-                    self.config['shapes'] = {}
-                if 'animated' not in self.config['shapes']:
-                    self.config['shapes']['animated'] = []
-                self.config['shapes']['animated'].append(shape_config)
+                preset = self.get_active_preset()
+                if 'shapes' not in preset:
+                    preset['shapes'] = {}
+                if 'animated' not in preset['shapes']:
+                    preset['shapes']['animated'] = []
+                preset['shapes']['animated'].append(shape_config)
                 self.mark_unsaved()
                 print()
                 input("Press Enter to continue...")
@@ -2024,7 +2027,7 @@ class ConfigMenu:
                 return
 
             new_shapes = [shapes[i] for i in order]
-            self.config['shapes']['animated'] = new_shapes
+            self.get_active_preset()['shapes']['animated'] = new_shapes
             self.mark_unsaved()
 
             self.print_success("Shapes reordered!")
