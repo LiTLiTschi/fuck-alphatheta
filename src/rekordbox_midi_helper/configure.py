@@ -378,7 +378,7 @@ class ConfigMenu:
             RGB tuple (r, g, b)
         """
         try:
-            # Capture single pixel (1x1) - no averaging
+            # Capture single pixel (1x1) - exactly like the working script
             monitor = {
                 "left": x,
                 "top": y,
@@ -388,12 +388,14 @@ class ConfigMenu:
 
             screenshot = self.sct.grab(monitor)
 
-            # mss returns BGRA, get RGB from single pixel
-            # screenshot.pixel(0, 0) returns (B, G, R, A)
-            pixel = screenshot.pixel(0, 0)
+            # Use numpy array like screen_monitor.py (proven to work)
+            img = np.array(screenshot)
 
-            # Return as RGB (convert from BGR)
-            return (int(pixel[2]), int(pixel[1]), int(pixel[0]))
+            # MSS numpy array is BGRA format, convert to RGB
+            # img[0, 0, 0] = B, img[0, 0, 1] = G, img[0, 0, 2] = R
+            rgb_color = (int(img[0, 0, 2]), int(img[0, 0, 1]), int(img[0, 0, 0]))
+
+            return rgb_color
         except Exception as e:
             self.print_error(f"Failed to capture color: {e}")
             return (0, 0, 0)

@@ -370,6 +370,9 @@ def cmd_logs(args):
 
 def main():
     """Main CLI entry point."""
+    # Import version
+    from . import __version__
+
     parser = argparse.ArgumentParser(
         prog='fucka',
         description='Rekordbox MIDI Helper - Because AlphaTheta sucks',
@@ -386,6 +389,10 @@ Examples:
   fucka logs --follow             # Follow logs in real-time
         """
     )
+
+    # Add version flag
+    parser.add_argument('--version', '-v', action='version',
+                       version=f'fucka {__version__}')
 
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
