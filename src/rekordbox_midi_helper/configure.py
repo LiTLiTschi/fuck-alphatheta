@@ -38,6 +38,7 @@ from colorama import init, Fore, Back, Style
 # Import project modules (relative imports within package)
 from .utils.color_utils import rgb_to_hex
 from .utils.midi_utils import parse_midi_message
+from .utils.config_path import get_config_path
 from .config_loader import ConfigLoader, ConfigValidationError
 
 # Initialize colorama for colored terminal output
@@ -52,14 +53,14 @@ class ConfigMenu:
     a hierarchical menu system with keyboard shortcuts and status tracking.
     """
 
-    def __init__(self, config_path: str = "config/config.yaml"):
+    def __init__(self, config_path: Optional[str] = None):
         """
         Initialize configuration menu.
 
         Args:
-            config_path: Path to save/load configuration file
+            config_path: Path to save/load configuration file (defaults to ~/.fucka/config.yaml)
         """
-        self.config_path = config_path
+        self.config_path = config_path if config_path else str(get_config_path())
 
         # Menu state management
         self.menu_stack: List[str] = []  # Navigation breadcrumb
