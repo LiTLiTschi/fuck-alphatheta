@@ -209,8 +209,29 @@ def cmd_start(args):
             write_pid(proc.pid)
             print_success(f"Application started successfully (PID: {proc.pid})")
             print_info(f"Logs: {LOG_FILE}")
-            print_info(f"Use 'fucka status' to check status")
-            print_info(f"Use 'fucka stop' to stop the application")
+
+            # If --monitor flag is set, start live monitor
+            if hasattr(args, 'monitor') and args.monitor:
+                print()
+                print_info("Starting live monitor...")
+                print_info("Press Ctrl+C to stop monitor (app will continue running)")
+                print()
+                time.sleep(1)
+
+                from .live_monitor import main as live_monitor_main
+                try:
+                    live_monitor_main(config_path)
+                except KeyboardInterrupt:
+                    print()
+                    print_info("Monitor stopped")
+                print()
+                print_info(f"Application still running (PID: {proc.pid})")
+                print_info(f"Use 'fucka monitor' to show monitor again")
+                print_info(f"Use 'fucka stop' to stop the application")
+            else:
+                print_info(f"Use 'fucka status' to check status")
+                print_info(f"Use 'fucka monitor' to show live monitor")
+                print_info(f"Use 'fucka stop' to stop the application")
         else:
             print_error("Application failed to start")
             print_info(f"Check logs at: {LOG_FILE}")
@@ -373,6 +394,61 @@ def cmd_logs(args):
         sys.exit(1)
 
 
+def cmd_monitor(args):
+    """Show live monitor display."""
+    from .utils.config_path import get_config_path
+    from .live_monitor import main as live_monitor_main
+
+    # Use ~/.config/fucka/config.yaml (or custom path if provided)
+    if args.config:
+        config_path = args.config
+    else:
+        config_path = str(get_config_path())
+
+    if not os.path.exists(config_path):
+        print_error(f"Configuration file not found: {config_path}")
+        print_info("Run 'fucka config' to create a configuration file")
+        sys.exit(1)
+
+    live_monitor_main(config_path)
+
+
+def cmd_update(args):
+    """Update fucka to the latest version from GitHub."""
+    print_info("Updating fucka from GitHub...")
+
+    # Determine which branch to use
+    branch = args.branch if hasattr(args, 'branch') and args.branch else 'main'
+
+    # Build install command
+    url = f"git+https://github.com/LiTLiTschi/fuck-alphatheta.git@{branch}"
+
+    try:
+        # Try uv first, then pip
+        if os.system("uv --version > /dev/null 2>&1") == 0:
+            print_info(f"Using uv to install from branch: {branch}")
+            cmd = f"uv pip install --force-reinstall {url}"
+        else:
+            print_info(f"Using pip to install from branch: {branch}")
+            cmd = f"pip install --force-reinstall {url}"
+
+        print_info(f"Running: {cmd}")
+        result = os.system(cmd)
+
+        if result == 0:
+            # Get new version
+            from . import __version__
+            print_success(f"Successfully updated to version {__version__}")
+            print_info("Restart any running fucka instances for changes to take effect")
+        else:
+            print_error("Update failed")
+            sys.exit(1)
+
+    except Exception as e:
+        print_error(f"Update failed: {e}")
+        sys.exit(1)
+
+
 def main():
     """Main CLI entry point."""
     # Import version
@@ -386,10 +462,13 @@ def main():
 Examples:
   fucka config                    # Run configuration wizard
   fucka start                     # Start application in background
+  fucka start --monitor           # Start with live monitor display
   fucka start --debug             # Start with debug logging
   fucka stop                      # Stop running application
   fucka status                    # Check if running
-  fucka run                       # Run in foreground
+  fucka monitor                   # Show live monitor display
+  fucka update                    # Update to latest version from GitHub
+  fucka run                       # Run in foreground (debugging)
   fucka logs                      # Show recent logs
   fucka logs --follow             # Follow logs in real-time
         """
@@ -412,6 +491,8 @@ Examples:
     parser_start.add_argument('--config', type=str, default=None,
                               help='Configuration file path (default: ~/.config/fucka/config.yaml)')
     parser_start.add_argument('--debug', action='store_true', help='Enable debug mode')
+    parser_start.add_argument('--monitor', '-m', action='store_true',
+                              help='Show live monitor display after starting')
     parser_start.set_defaults(func=cmd_start)
 
     # Stop command
@@ -436,6 +517,18 @@ Examples:
     parser_logs.add_argument('--follow', '-f', action='store_true',
                              help='Follow log file in real-time')
     parser_logs.set_defaults(func=cmd_logs)
+
+    # Monitor command
+    parser_monitor = subparsers.add_parser('monitor', help='Show live monitor display')
+    parser_monitor.add_argument('--config', type=str, default=None,
+                                help='Configuration file path (default: ~/.config/fucka/config.yaml)')
+    parser_monitor.set_defaults(func=cmd_monitor)
+
+    # Update command
+    parser_update = subparsers.add_parser('update', help='Update fucka to latest version from GitHub')
+    parser_update.add_argument('--branch', '-b', type=str, default='main',
+                               help='Git branch to install from (default: main)')
+    parser_update.set_defaults(func=cmd_update)
 
     # Parse arguments
     args = parser.parse_args()
