@@ -15,6 +15,11 @@ general:
   # Then configure the port name using: fucka config
   midi_port: "loopMIDI Port"
 
+  # MIDI Input Port Configuration (where fucka listens for MIDI)
+  # This is typically where Bome MIDI Translator or your hardware controller sends MIDI
+  # Leave empty to be prompted on each use, or configure once in General Settings
+  midi_input_port: ""
+
   # Screen monitoring frame rate (1-60 FPS)
   # Higher FPS = lower latency but higher CPU usage
   # Recommended: 30 for normal use, 60 for fast response

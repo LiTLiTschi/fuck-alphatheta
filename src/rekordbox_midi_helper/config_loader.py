@@ -94,6 +94,10 @@ class ConfigLoader:
         if 'midi_port' not in general:
             raise ConfigValidationError("Missing 'midi_port' in general section")
 
+        # Validate midi_input_port exists (add if missing with empty default)
+        if 'midi_input_port' not in general:
+            general['midi_input_port'] = ''
+
         # Validate presets section
         if 'presets' not in self.config:
             raise ConfigValidationError("Missing 'presets' section in config")
@@ -230,6 +234,16 @@ class ConfigLoader:
             MIDI port name string
         """
         return self.config['general'].get('midi_port', 'loopMIDI Port')
+
+    def get_midi_input_port_name(self) -> Optional[str]:
+        """
+        Get configured MIDI input port name.
+
+        Returns:
+            Port name if configured, None if not configured (empty string)
+        """
+        port = self.config['general'].get('midi_input_port', '')
+        return port if port else None
 
     def get_screen_monitor_fps(self) -> int:
         """

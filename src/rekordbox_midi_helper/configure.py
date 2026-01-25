@@ -89,6 +89,7 @@ class ConfigMenu:
         self.config: Dict[str, Any] = {
             'general': {
                 'midi_port': 'loopMIDI Port',
+                'midi_input_port': '',
                 'screen_monitor_fps': 30,
                 'debug_mode': False,
                 'active_preset': 'default'
@@ -517,81 +518,94 @@ class ConfigMenu:
         elif msg.type == 'control_change':
             print(f"\r{Fore.YELLOW}[MIDI] CC       Ch{msg.channel+1:2d} CC={msg.control:3d} Val={msg.value:3d}     {Style.RESET_ALL}", end='', flush=True)
 
-    def listen_for_midi(self, timeout: int = 10) -> Optional[Dict[str, Any]]:
+    def _choose_input_port_interactive(self) -> Optional[str]:
         """
-        Listen for incoming MIDI messages with guided port discovery.
-
-        Args:
-            timeout: Seconds to listen before timing out
+        Interactive port selection with auto-scan option.
 
         Returns:
-            MIDI message dict or None if timeout/cancelled
+            Selected port name, or None if cancelled
         """
         import mido
 
-        self.print_info("MIDI Port Setup - Let's find the right port!")
+        input_ports = mido.get_input_names()
+
+        if not input_ports:
+            self.print_warning("No MIDI input ports found!")
+            return None
+
+        # Show available ports
+        print(f"{Fore.CYAN}Available INPUT ports:{Style.RESET_ALL}")
+        for i, port in enumerate(input_ports):
+            print(f"  {i+1}. {port}")
+
+        print()
+        print(f"{Fore.CYAN}Options:{Style.RESET_ALL}")
+        print(f"  {Fore.GREEN}[s]{Style.RESET_ALL} Scan all ports automatically (recommended)")
+        print(f"  {Fore.YELLOW}[1-{len(input_ports)}]{Style.RESET_ALL} Select port manually")
+        print(f"  {Fore.RED}[c]{Style.RESET_ALL} Cancel")
         print()
 
+        choice = input(f"Your choice (s/1-{len(input_ports)}/c): ").strip().lower()
+
+        if choice == 'c':
+            return None
+
+        if choice == 's':
+            port_name, _ = self._scan_for_active_midi_port(input_ports, scan_time=2)
+            if port_name:
+                print()
+                self.print_success(f"Found active MIDI on: {port_name}")
+            return port_name
+
+        # Manual selection
         try:
-            # List available input ports
-            input_ports = mido.get_input_names()
+            port_choice = int(choice)
+            if 1 <= port_choice <= len(input_ports):
+                return input_ports[port_choice - 1]
+        except ValueError:
+            pass
 
-            if not input_ports:
-                self.print_warning("No MIDI input ports found!")
-                return None
+        self.print_error("Invalid choice")
+        return None
 
-            # Offer scan vs manual selection
-            print(f"{Fore.CYAN}Available INPUT ports:{Style.RESET_ALL}")
-            for i, port in enumerate(input_ports):
-                print(f"  {i+1}. {port}")
+    def listen_for_midi(self, timeout: int = 10, allow_port_override: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        Listen for incoming MIDI messages with configured port support and retry.
 
+        Args:
+            timeout: Seconds to listen before timing out
+            allow_port_override: If True, always prompt for port (for testing)
+
+        Returns:
+            MIDI message dict or None if cancelled
+        """
+        import mido
+
+        # Check for configured input port
+        configured_port = self.config['general'].get('midi_input_port', '')
+
+        if configured_port and not allow_port_override:
+            # Use configured port
+            selected_port = configured_port
+            self.print_info(f"Using configured MIDI input: {configured_port}")
             print()
-            print(f"{Fore.CYAN}Options:{Style.RESET_ALL}")
-            print(f"  {Fore.GREEN}[s]{Style.RESET_ALL} Scan all ports automatically (recommended)")
-            print(f"  {Fore.YELLOW}[1-{len(input_ports)}]{Style.RESET_ALL} Select port manually")
+        else:
+            # Prompt for port selection
+            self.print_info("MIDI Port Setup - Let's find the right port!")
             print()
+            selected_port = self._choose_input_port_interactive()
 
-            choice = input(f"Your choice (s or 1-{len(input_ports)}): ").strip().lower()
+            if not selected_port:
+                return None  # User cancelled
 
-            selected_port = None
-
-            if choice == 's':
-                # Auto-scan mode
-                port_name, first_msg = self._scan_for_active_midi_port(input_ports, scan_time=2)
-
-                if not port_name:
-                    print()
-                    self.print_error("No active MIDI found on any port")
-                    self.print_info("Make sure:")
-                    print("  1. Your MIDI device/Bome is sending MIDI")
-                    print("  2. The device is properly connected")
-                    print("  3. No other software has the port open")
-                    return None
-
-                selected_port = port_name
+        # Listen loop with retry capability
+        while True:
+            # Check if port is in use
+            configured_output = self.config.get('general', {}).get('midi_port', '')
+            if configured_output and selected_port.startswith(configured_output.rsplit(' ', 1)[0]):
                 print()
-                self.print_success(f"Found active MIDI on: {selected_port}")
-                print()
-
-            else:
-                # Manual selection
-                try:
-                    port_choice = int(choice)
-                    if 1 <= port_choice <= len(input_ports):
-                        selected_port = input_ports[port_choice - 1]
-                    else:
-                        self.print_error(f"Invalid choice. Please enter 1-{len(input_ports)} or 's'")
-                        return None
-                except ValueError:
-                    self.print_error(f"Invalid choice. Please enter 1-{len(input_ports)} or 's'")
-                    return None
-
-            # Check if this port might be in use
-            configured_port = self.config.get('general', {}).get('midi_port', '')
-            if configured_port and selected_port.startswith(configured_port.rsplit(' ', 1)[0]):
-                print()
-                self.print_warning(f"Port '{selected_port}' might be used by running fucka instance")
-                self.print_info("If capture fails, try stopping fucka first: fucka stop")
+                self.print_warning(f"Port '{selected_port}' might be used by running fucka")
+                self.print_info("If capture fails, try: fucka stop")
                 print()
                 if not self.get_yes_no("Continue anyway?", False):
                     return None
@@ -603,7 +617,6 @@ class ConfigMenu:
             except Exception as e:
                 self.print_error(f"Failed to open port: {e}")
                 print()
-                self.print_info("This usually means the port is already in use")
                 self.print_info("Try one of these:")
                 print("  1. Stop fucka: fucka stop")
                 print("  2. Select a different MIDI port")
@@ -655,7 +668,7 @@ class ConfigMenu:
                                 'type': 'note',
                                 'channel': msg.channel,
                                 'data1': msg.note,
-                                'data2': 0  # note_off has no velocity
+                                'data2': 0
                             }
                             break
                         elif msg.type == 'control_change':
@@ -667,8 +680,7 @@ class ConfigMenu:
                             }
                             break
 
-                    # Reduced polling interval for better responsiveness
-                    time.sleep(0.02)  # 20ms = 50Hz polling rate
+                    time.sleep(0.02)  # 20ms polling
 
                 print()  # New line after live feedback
 
@@ -676,6 +688,7 @@ class ConfigMenu:
                 keyboard_listener.stop()
                 midi_port.close()
 
+            # Handle result
             if captured_msg[0]:
                 msg = captured_msg[0]
                 print()
@@ -683,22 +696,22 @@ class ConfigMenu:
                 print(f"  Data1 (Note/Controller): {msg['data1']}")
                 print(f"  Data2 (Velocity/Value): {msg['data2']}")
                 return captured_msg[0]
+
             elif cancelled[0]:
                 print()
                 self.print_info("Cancelled by user")
                 return None
-            else:
-                print()
-                self.print_warning("Timeout - no MIDI received")
-                self.print_info("Troubleshooting:")
-                print("  • Make sure your device is sending MIDI")
-                print("  • Try the 's' scan option to find active ports")
-                print("  • Check that no other software has the port open")
-                return None
 
-        except Exception as e:
-            self.print_error(f"MIDI setup failed: {e}")
-            return None
+            else:
+                # Timeout - ask to retry
+                print()
+                if self.get_yes_no("Timeout - no MIDI received. Listen again?", True):
+                    self.print_info("Retrying...")
+                    print()
+                    continue  # Retry the listen loop
+                else:
+                    self.print_info("Cancelled")
+                    return None
 
     def configure_general_settings(self):
         """Configure general application settings."""
@@ -1190,6 +1203,38 @@ class ConfigMenu:
         print("  3. Save this configuration (press 's')")
         print()
 
+    def configure_midi_input_port(self):
+        """Configure the global MIDI input port for listening to Bome/hardware."""
+        self.print_header("Configure MIDI Input Port")
+
+        print()
+        self.print_info("This is the port where fucka LISTENS for MIDI")
+        self.print_info("(e.g., 'Bome MIDI Translator 1' where Bome sends MIDI)")
+        print()
+
+        # Show current setting
+        current = self.config['general'].get('midi_input_port', '')
+        if current:
+            self.print_success(f"Current: {current}")
+        else:
+            self.print_warning("Not configured - will prompt on each use")
+
+        print()
+        if not self.get_yes_no("Configure MIDI input port now?", True):
+            return
+
+        # Interactive port selection
+        port_name = self._choose_input_port_interactive()
+
+        if port_name:
+            self.config['general']['midi_input_port'] = port_name
+            self.print_success(f"✓ Set MIDI input port to: {port_name}")
+        else:
+            self.print_info("Configuration cancelled")
+
+        print()
+        input("Press Enter to continue...")
+
     def menu_general_settings(self):
         """General settings menu with editing."""
         self.menu_stack.append("General Settings")
@@ -1208,8 +1253,15 @@ class ConfigMenu:
             debug_color = Fore.YELLOW if general.get('debug_mode', False) else Fore.GREEN
             print(f"  3. Debug Mode: {debug_color}{debug_status}{Style.RESET_ALL}")
 
+            # Display midi_input_port
+            midi_input = general.get('midi_input_port', '')
+            if midi_input:
+                print(f"  4. MIDI Input Port (Bome/Hardware): {Fore.GREEN}{midi_input}{Style.RESET_ALL}")
+            else:
+                print(f"  4. MIDI Input Port (Bome/Hardware): {Fore.YELLOW}(not configured){Style.RESET_ALL}")
+
             print(f"\n{Fore.CYAN}[Actions]{Style.RESET_ALL}\n")
-            print("  4. Edit setting")
+            print("  5. Edit setting")
             print("  b. Back to Main Menu")
 
             self.print_status_bar()
@@ -1224,11 +1276,11 @@ class ConfigMenu:
             elif choice == 'm':
                 self.menu_stack.pop()
                 return
-            elif choice == '4' or choice in ['1', '2', '3']:
+            elif choice == '5' or choice in ['1', '2', '3', '4']:
                 # Allow direct selection of setting to edit
-                if choice == '4':
+                if choice == '5':
                     print()
-                    setting_choice = input("Which setting to edit? (1-3): ").strip()
+                    setting_choice = input("Which setting to edit? (1-4): ").strip()
                 else:
                     setting_choice = choice
 
@@ -1255,6 +1307,10 @@ class ConfigMenu:
                         self.print_success("Debug mode updated")
                     else:
                         self.print_info("No change")
+                elif setting_choice == '4':
+                    self.configure_midi_input_port()
+                    self.mark_unsaved()
+                    self.print_success("MIDI input port updated")
                 else:
                     self.print_warning("Invalid choice")
 
