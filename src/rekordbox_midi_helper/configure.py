@@ -500,8 +500,28 @@ class ConfigMenu:
 
             selected_port = ports[port_choice - 1]
 
+            # Check if this port might be in use
+            configured_port = self.config.get('general', {}).get('midi_port', '')
+            if configured_port and selected_port.startswith(configured_port.rsplit(' ', 1)[0]):
+                print()
+                self.print_warning(f"Port '{selected_port}' might be used by running fucka instance")
+                self.print_info("If capture fails, try stopping fucka first: fucka stop")
+                print()
+                if not self.get_yes_no("Continue anyway?", False):
+                    return None
+
             # Open the port
-            midi_port = mido.open_input(selected_port)
+            try:
+                midi_port = mido.open_input(selected_port)
+            except Exception as e:
+                self.print_error(f"MIDI listening failed: {e}")
+                print()
+                self.print_info("This usually means the port is already in use")
+                self.print_info("Try one of these:")
+                print("  1. Stop fucka: fucka stop")
+                print("  2. Select a different MIDI port")
+                print("  3. Close other MIDI software using this port")
+                return None
 
             # Listen for MIDI
             captured_msg = [None]
@@ -2067,6 +2087,7 @@ class ConfigMenu:
             print("  1. Test MIDI connections")
             print("  2. Validate configuration")
             print("  3. Live preview monitors")
+            print("  4. Debug shapes (test overlay)")
             print("  b. Back to Main Menu")
 
             self.print_status_bar()
@@ -2085,6 +2106,8 @@ class ConfigMenu:
                 self.validate_configuration()
             elif choice == '3':
                 self.live_preview_monitors()
+            elif choice == '4':
+                self.debug_shapes()
             else:
                 self.print_warning("Invalid choice")
 
@@ -2265,6 +2288,127 @@ class ConfigMenu:
         except KeyboardInterrupt:
             print("\n")
             self.print_info("Preview stopped")
+
+        print()
+        input("Press Enter to continue...")
+
+    def debug_shapes(self):
+        """Debug overlay shapes - test if they appear on screen."""
+        self.print_header("Debug Shapes")
+
+        preset = self.get_active_preset()
+        static_shapes = preset.get('shapes', {}).get('static', [])
+        animated_shapes = preset.get('shapes', {}).get('animated', [])
+
+        total_shapes = len(static_shapes) + len(animated_shapes)
+
+        if total_shapes == 0:
+            self.print_warning("No shapes configured")
+            print()
+            input("Press Enter to continue...")
+            return
+
+        # Show configured shapes
+        print(f"{Fore.CYAN}Configured Shapes:{Style.RESET_ALL}\n")
+
+        if static_shapes:
+            print(f"{Fore.GREEN}Static Shapes ({len(static_shapes)}):{Style.RESET_ALL}")
+            for shape in static_shapes:
+                pos = shape.get('position', {})
+                trigger = shape.get('trigger_midi', {})
+                print(f"  • {shape['id']}: {shape['type']} at ({pos.get('x', 0)}, {pos.get('y', 0)})")
+                print(f"    Trigger: {trigger.get('type', 'unknown')} CH{trigger.get('channel', 1)} "
+                      f"{'Note' if trigger.get('type') == 'note' else 'CC'} {trigger.get('note', trigger.get('controller', 0))}")
+            print()
+
+        if animated_shapes:
+            print(f"{Fore.GREEN}Animated Shapes ({len(animated_shapes)}):{Style.RESET_ALL}")
+            for shape in animated_shapes:
+                pos = shape.get('position', {})
+                control = shape.get('control_midi', {})
+                print(f"  • {shape['id']}: {shape['type']} at ({pos.get('x', 0)}, {pos.get('y', 0)})")
+                print(f"    Control: CC{control.get('controller', 0)} CH{control.get('channel', 1)}")
+            print()
+
+        # Offer to test shape display
+        print(f"{Fore.YELLOW}Shape Test Feature:{Style.RESET_ALL}\n")
+        print("  This will test if the overlay window works by showing a test shape")
+        print("  The test shape will appear at the top-left of your screen for 5 seconds")
+        print()
+
+        if not self.get_yes_no("Run shape test?", False):
+            print()
+            input("Press Enter to continue...")
+            return
+
+        # Test shape display
+        self.print_info("Starting shape test...")
+        self.print_info("A red circle should appear at top-left of your screen for 5 seconds")
+        print()
+
+        try:
+            from PyQt5.QtWidgets import QApplication
+            from PyQt5.QtCore import QTimer
+            from .overlay_window import OverlayWindow
+            from .utils.threading_utils import ThreadSafeQueue, ShutdownEvent
+
+            # Create Qt application
+            app = QApplication.instance()
+            if app is None:
+                app = QApplication(sys.argv)
+
+            # Create overlay with a test shape
+            test_shape = {
+                'id': 'test_shape',
+                'type': 'circle',
+                'position': {'x': 100, 'y': 100},
+                'size': {'radius': 50},
+                'color': {'r': 255, 'g': 0, 'b': 0, 'a': 255},
+                'trigger_midi': {'type': 'note', 'channel': 0, 'note': 60}
+            }
+
+            midi_queue = ThreadSafeQueue()
+            shutdown_event = ShutdownEvent()
+
+            overlay = OverlayWindow(
+                static_shapes=[test_shape],
+                animated_shapes=[],
+                midi_input_queue=midi_queue,
+                shutdown_event=shutdown_event,
+                debug=True
+            )
+
+            # Show the overlay
+            overlay.show()
+
+            # Force the test shape to be visible
+            overlay.shape_states[test_shape['id']] = True
+            overlay.update()
+
+            self.print_success("Test shape created - it should be visible now!")
+            self.print_info("Red circle at position (100, 100) with radius 50")
+            self.print_info("If you don't see it, your overlay might not be working")
+            print()
+
+            # Keep it visible for 5 seconds
+            for i in range(5, 0, -1):
+                print(f"\rClosing in {i} seconds...", end='', flush=True)
+                app.processEvents()
+                time.sleep(1)
+
+            print("\n")
+
+            # Cleanup
+            overlay.close()
+            self.print_success("Test complete!")
+
+        except Exception as e:
+            self.print_error(f"Shape test failed: {e}")
+            print()
+            self.print_info("This could mean:")
+            print("  1. PyQt5 is not installed correctly")
+            print("  2. Overlay window cannot be created")
+            print("  3. Your system doesn't support transparent windows")
 
         print()
         input("Press Enter to continue...")
