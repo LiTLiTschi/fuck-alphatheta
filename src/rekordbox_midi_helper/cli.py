@@ -22,6 +22,7 @@ import argparse
 import subprocess
 import time
 import signal
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -418,14 +419,15 @@ def cmd_update(args):
     print_info("Updating fucka from GitHub...")
 
     # Determine which branch to use
-    branch = args.branch if hasattr(args, 'branch') and args.branch else 'main'
+    # Default to feature branch (where active development is)
+    branch = args.branch if hasattr(args, 'branch') and args.branch else 'claude/rekordbox-midi-python-script-FuBNl'
 
     # Build install command
     url = f"git+https://github.com/LiTLiTschi/fuck-alphatheta.git@{branch}"
 
     try:
-        # Try uv first, then pip
-        if os.system("uv --version > /dev/null 2>&1") == 0:
+        # Check if uv is available using shutil.which (cross-platform)
+        if shutil.which("uv") is not None:
             print_info(f"Using uv to install from branch: {branch}")
             cmd = f"uv pip install --force-reinstall {url}"
         else:
@@ -526,8 +528,8 @@ Examples:
 
     # Update command
     parser_update = subparsers.add_parser('update', help='Update fucka to latest version from GitHub')
-    parser_update.add_argument('--branch', '-b', type=str, default='main',
-                               help='Git branch to install from (default: main)')
+    parser_update.add_argument('--branch', '-b', type=str, default=None,
+                               help='Git branch to install from (default: claude/rekordbox-midi-python-script-FuBNl)')
     parser_update.set_defaults(func=cmd_update)
 
     # Parse arguments
