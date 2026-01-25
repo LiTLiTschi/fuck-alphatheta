@@ -429,48 +429,103 @@ def cmd_update(args):
         # Get current version before update
         from . import __version__ as current_version
 
-        # Check if uv is available using shutil.which (cross-platform)
-        # Use python -m to run in separate process (avoids .exe lock on Windows)
-        if shutil.which("uv") is not None:
-            print_info(f"Using uv to install from branch: {branch}")
-            cmd = [sys.executable, "-m", "uv", "pip", "install", "--force-reinstall", url]
-        else:
-            print_info(f"Using pip to install from branch: {branch}")
-            cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", url]
+        # Check if uv is available
+        uv_path = shutil.which("uv")
 
-        print_info(f"Running: {' '.join(cmd)}")
+        if os.name == 'nt':  # Windows
+            # On Windows, fucka.exe cannot update itself while running
+            # Solution: Create a batch script that runs after fucka exits
 
-        # Use subprocess instead of os.system for better control
-        result = subprocess.run(cmd, capture_output=False)
+            print_info(f"Detected Windows - creating update script")
 
-        if result.returncode == 0:
+            # Create update script
+            ensure_fucka_dir()
+            update_script = Path.home() / ".config" / "fucka" / "update_fucka.bat"
+
+            if uv_path:
+                install_cmd = f'uv pip install --force-reinstall "{url}"'
+            else:
+                install_cmd = f'"{sys.executable}" -m pip install --force-reinstall "{url}"'
+
+            batch_content = f'''@echo off
+echo Updating fucka from branch: {branch}
+echo.
+timeout /t 2 /nobreak >nul
+{install_cmd}
+if %ERRORLEVEL% EQU 0 (
+    echo.
+    echo Update completed successfully!
+    echo Run 'fucka --version' to check the new version
+) else (
+    echo.
+    echo Update failed!
+)
+echo.
+pause
+del "%~f0"
+'''
+
+            update_script.write_text(batch_content)
+
+            print_info(f"Starting update script...")
+            print_info(f"Current version: {current_version}")
             print()
-            print_success("Update completed successfully!")
+            print_warning("This window will now close and the update will run in a new window")
+            print_info("The update window will close automatically when done")
 
-            # Try to get new version by running fucka --version in subprocess
-            # (current process still has old version loaded)
-            try:
-                version_result = subprocess.run(
-                    [sys.executable, "-m", "rekordbox_midi_helper.cli", "--version"],
-                    capture_output=True,
-                    text=True
-                )
-                if version_result.returncode == 0:
-                    new_version = version_result.stdout.strip().replace("fucka ", "")
-                    if new_version != current_version:
-                        print_success(f"Updated: {current_version} → {new_version}")
+            # Start the batch script detached
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            DETACHED_PROCESS = 0x00000008
+
+            subprocess.Popen(
+                ['cmd', '/c', 'start', 'cmd', '/c', str(update_script)],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                close_fds=True
+            )
+
+            # Exit immediately so the .exe can be updated
+            sys.exit(0)
+
+        else:  # Linux/Mac
+            # On Linux/Mac we can update directly
+            if uv_path:
+                print_info(f"Using uv to install from branch: {branch}")
+                cmd = ["uv", "pip", "install", "--force-reinstall", url]
+            else:
+                print_info(f"Using pip to install from branch: {branch}")
+                cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", url]
+
+            print_info(f"Running: {' '.join(cmd)}")
+
+            result = subprocess.run(cmd, capture_output=False)
+
+            if result.returncode == 0:
+                print()
+                print_success("Update completed successfully!")
+
+                # Get new version
+                try:
+                    version_result = subprocess.run(
+                        [sys.executable, "-m", "rekordbox_midi_helper.cli", "--version"],
+                        capture_output=True,
+                        text=True
+                    )
+                    if version_result.returncode == 0:
+                        new_version = version_result.stdout.strip().replace("fucka ", "")
+                        if new_version != current_version:
+                            print_success(f"Updated: {current_version} → {new_version}")
+                        else:
+                            print_info(f"Version: {new_version}")
                     else:
-                        print_info(f"Version: {new_version}")
-                else:
+                        print_info("Version updated (run 'fucka --version' to check)")
+                except:
                     print_info("Version updated (run 'fucka --version' to check)")
-            except:
-                print_info("Version updated (run 'fucka --version' to check)")
 
-            print()
-            print_info("Restart any running fucka instances for changes to take effect")
-        else:
-            print_error("Update failed")
-            sys.exit(1)
+                print()
+                print_info("Restart any running fucka instances for changes to take effect")
+            else:
+                print_error("Update failed")
+                sys.exit(1)
 
     except Exception as e:
         print_error(f"Update failed: {e}")
