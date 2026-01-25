@@ -426,21 +426,47 @@ def cmd_update(args):
     url = f"git+https://github.com/LiTLiTschi/fuck-alphatheta.git@{branch}"
 
     try:
+        # Get current version before update
+        from . import __version__ as current_version
+
         # Check if uv is available using shutil.which (cross-platform)
+        # Use python -m to run in separate process (avoids .exe lock on Windows)
         if shutil.which("uv") is not None:
             print_info(f"Using uv to install from branch: {branch}")
-            cmd = f"uv pip install --force-reinstall {url}"
+            cmd = [sys.executable, "-m", "uv", "pip", "install", "--force-reinstall", url]
         else:
             print_info(f"Using pip to install from branch: {branch}")
-            cmd = f"pip install --force-reinstall {url}"
+            cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", url]
 
-        print_info(f"Running: {cmd}")
-        result = os.system(cmd)
+        print_info(f"Running: {' '.join(cmd)}")
 
-        if result == 0:
-            # Get new version
-            from . import __version__
-            print_success(f"Successfully updated to version {__version__}")
+        # Use subprocess instead of os.system for better control
+        result = subprocess.run(cmd, capture_output=False)
+
+        if result.returncode == 0:
+            print()
+            print_success("Update completed successfully!")
+
+            # Try to get new version by running fucka --version in subprocess
+            # (current process still has old version loaded)
+            try:
+                version_result = subprocess.run(
+                    [sys.executable, "-m", "rekordbox_midi_helper.cli", "--version"],
+                    capture_output=True,
+                    text=True
+                )
+                if version_result.returncode == 0:
+                    new_version = version_result.stdout.strip().replace("fucka ", "")
+                    if new_version != current_version:
+                        print_success(f"Updated: {current_version} → {new_version}")
+                    else:
+                        print_info(f"Version: {new_version}")
+                else:
+                    print_info("Version updated (run 'fucka --version' to check)")
+            except:
+                print_info("Version updated (run 'fucka --version' to check)")
+
+            print()
             print_info("Restart any running fucka instances for changes to take effect")
         else:
             print_error("Update failed")
