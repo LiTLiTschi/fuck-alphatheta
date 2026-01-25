@@ -463,42 +463,71 @@ class ConfigMenu:
 
         return (0, 0, 0)
 
-    def _scan_for_active_midi_port(self, input_ports: List[str], scan_time: int = 2) -> Tuple[Optional[str], Optional[Any]]:
+    def _scan_all_ports_simultaneously(self, input_ports: List[str], scan_time: int = 10) -> Tuple[Optional[str], Optional[Any]]:
         """
-        Scan all input ports to find one with active MIDI.
+        Open ALL input ports at once and listen simultaneously.
+
+        This is MUCH more user-friendly than sequential scanning because:
+        - User can press button anytime in the 10-second window
+        - Not dependent on timing the press to a specific port's 2-second window
 
         Args:
-            input_ports: List of MIDI input port names
-            scan_time: Seconds to wait on each port
+            input_ports: List of MIDI input port names to scan
+            scan_time: Seconds to listen (default 10)
 
         Returns:
-            Tuple of (port_name, first_message) or (None, None) if no active port found
+            (port_name, first_message) or (None, None) if no MIDI found
         """
         import mido
+        import threading
 
-        self.print_info("🔍 Scanning for active MIDI...")
-        print()
-        self.print_warning("Please start sending MIDI now (press a button, turn a knob)")
-        print()
+        found_port = [None]
+        found_msg = [None]
+        stop_flag = threading.Event()
 
-        for i, port_name in enumerate(input_ports):
-            print(f"Testing {i+1}/{len(input_ports)}: {port_name[:45]}...", end='', flush=True)
-
+        def listen_on_port(port_name: str):
+            """Thread function to listen on one port."""
             try:
                 with mido.open_input(port_name) as port:
-                    start = time.time()
-                    while time.time() - start < scan_time:
+                    while not stop_flag.is_set():
                         msg = port.receive(block=False)
                         if msg and msg.type in ['note_on', 'note_off', 'control_change']:
-                            print(f" {Fore.GREEN}✓ MIDI FOUND!{Style.RESET_ALL}")
-                            return port_name, msg
+                            # Skip note_on with velocity 0 (it's actually note_off)
+                            if msg.type == 'note_on' and msg.velocity == 0:
+                                continue
+                            # Found MIDI!
+                            if found_port[0] is None:  # First one wins
+                                found_port[0] = port_name
+                                found_msg[0] = msg
+                            stop_flag.set()  # Stop all threads
+                            return
                         time.sleep(0.02)  # 20ms polling
-                    print(f" {Fore.YELLOW}(no MIDI){Style.RESET_ALL}")
-            except Exception as e:
-                print(f" {Fore.RED}(failed to open){Style.RESET_ALL}")
-                continue
+            except Exception:
+                pass  # Port couldn't be opened, skip it
 
-        return None, None
+        # Start thread for each port
+        threads = []
+        for port_name in input_ports:
+            t = threading.Thread(target=listen_on_port, args=(port_name,), daemon=True)
+            t.start()
+            threads.append(t)
+
+        # Show progress
+        print()
+        self.print_warning("Please send MIDI now (press a button, turn a knob)")
+        print()
+        self.print_info(f"🔍 Scanning {len(input_ports)} ports simultaneously for {scan_time} seconds...")
+        print()
+
+        # Wait for scan_time or until MIDI found
+        stop_flag.wait(timeout=scan_time)
+        stop_flag.set()  # Ensure all threads stop
+
+        # Wait for threads to finish (with timeout to avoid hanging)
+        for t in threads:
+            t.join(timeout=0.5)
+
+        return found_port[0], found_msg[0]
 
     def _show_midi_live(self, msg: Any) -> None:
         """
@@ -520,53 +549,74 @@ class ConfigMenu:
 
     def _choose_input_port_interactive(self) -> Optional[str]:
         """
-        Interactive port selection with auto-scan option.
+        Interactive port selection with auto-scan option and retry.
 
         Returns:
             Selected port name, or None if cancelled
         """
         import mido
 
-        input_ports = mido.get_input_names()
+        while True:  # Retry loop for scanning
+            input_ports = mido.get_input_names()
 
-        if not input_ports:
-            self.print_warning("No MIDI input ports found!")
-            return None
+            if not input_ports:
+                self.print_warning("No MIDI input ports found!")
+                return None
 
-        # Show available ports
-        print(f"{Fore.CYAN}Available INPUT ports:{Style.RESET_ALL}")
-        for i, port in enumerate(input_ports):
-            print(f"  {i+1}. {port}")
+            # Show available ports
+            print(f"{Fore.CYAN}Available INPUT ports:{Style.RESET_ALL}")
+            for i, port in enumerate(input_ports):
+                print(f"  {i+1}. {port}")
 
-        print()
-        print(f"{Fore.CYAN}Options:{Style.RESET_ALL}")
-        print(f"  {Fore.GREEN}[s]{Style.RESET_ALL} Scan all ports automatically (recommended)")
-        print(f"  {Fore.YELLOW}[1-{len(input_ports)}]{Style.RESET_ALL} Select port manually")
-        print(f"  {Fore.RED}[c]{Style.RESET_ALL} Cancel")
-        print()
+            print()
+            print(f"{Fore.CYAN}Options:{Style.RESET_ALL}")
+            print(f"  {Fore.GREEN}[s]{Style.RESET_ALL} Scan all ports simultaneously (recommended)")
+            print(f"  {Fore.YELLOW}[1-{len(input_ports)}]{Style.RESET_ALL} Select port manually")
+            print(f"  {Fore.RED}[c]{Style.RESET_ALL} Cancel")
+            print()
 
-        choice = input(f"Your choice (s/1-{len(input_ports)}/c): ").strip().lower()
+            choice = input(f"Your choice (s/1-{len(input_ports)}/c): ").strip().lower()
 
-        if choice == 'c':
-            return None
+            if choice == 'c':
+                return None
 
-        if choice == 's':
-            port_name, _ = self._scan_for_active_midi_port(input_ports, scan_time=2)
-            if port_name:
-                print()
-                self.print_success(f"Found active MIDI on: {port_name}")
-            return port_name
+            if choice == 's':
+                # Scan ALL ports simultaneously
+                port_name, msg = self._scan_all_ports_simultaneously(input_ports, scan_time=10)
 
-        # Manual selection
-        try:
-            port_choice = int(choice)
-            if 1 <= port_choice <= len(input_ports):
-                return input_ports[port_choice - 1]
-        except ValueError:
-            pass
+                if port_name:
+                    print()
+                    self.print_success(f"✓ Found active MIDI on: {port_name}")
+                    if msg:
+                        # Show what was detected
+                        if msg.type == 'note_on':
+                            print(f"  Detected: Note {msg.note} on Channel {msg.channel + 1}")
+                        elif msg.type == 'control_change':
+                            print(f"  Detected: CC {msg.control} on Channel {msg.channel + 1}")
+                    return port_name
+                else:
+                    # No MIDI found - ask to retry
+                    print()
+                    self.print_warning("No MIDI detected on any port")
+                    self.print_info("Make sure your device is sending MIDI")
+                    print()
+                    if self.get_yes_no("Scan again?", True):
+                        print()
+                        continue  # Retry scan
+                    else:
+                        return None  # User cancelled
 
-        self.print_error("Invalid choice")
-        return None
+            # Manual selection
+            try:
+                port_choice = int(choice)
+                if 1 <= port_choice <= len(input_ports):
+                    return input_ports[port_choice - 1]
+            except ValueError:
+                pass
+
+            self.print_error("Invalid choice")
+            print()
+            # Loop back to show options again
 
     def listen_for_midi(self, timeout: int = 10, allow_port_override: bool = False) -> Optional[Dict[str, Any]]:
         """
@@ -832,12 +882,12 @@ class ConfigMenu:
         self.print_success(f"Screen monitor '{monitor_id}' configured!")
         return monitor_config
 
-    def configure_static_shape(self) -> Dict[str, Any]:
+    def configure_static_shape(self) -> Optional[Dict[str, Any]]:
         """
         Configure a static shape.
 
         Returns:
-            Static shape configuration dict
+            Static shape configuration dict, or None if cancelled
         """
         self.print_header("Configure Static Shape")
 
@@ -886,22 +936,26 @@ class ConfigMenu:
         print(f"\n{Fore.CYAN}Configure MIDI trigger:{Style.RESET_ALL}")
         if self.get_yes_no("Listen for MIDI to capture trigger?", True):
             midi_msg = self.listen_for_midi()
-            if midi_msg:
-                trigger_midi = {
-                    'type': midi_msg['type'],
-                    'channel': midi_msg['channel'],
-                    'note': midi_msg['data1']
-                }
-            else:
-                trigger_midi = {
-                    'type': 'note',
-                    'channel': 1,
-                    'note': 60
-                }
+
+            if not midi_msg:
+                # User cancelled or no MIDI found after all retries
+                print()
+                self.print_warning("MIDI capture cancelled - shape not configured")
+                print()
+                input("Press Enter to continue...")
+                return None  # DON'T configure the shape with defaults
+
+            # Use captured MIDI values
+            trigger_midi = {
+                'type': midi_msg['type'],
+                'channel': midi_msg['channel'],
+                'note': midi_msg['data1']
+            }
         else:
+            # Manual input path (user chose not to listen)
             trigger_midi = {
                 'type': self.get_input("Trigger type (note/cc)", "note"),
-                'channel': int(self.get_input("MIDI channel (1-16)", "1")),
+                'channel': int(self.get_input("MIDI channel (1-16)", "1")) - 1,  # Convert to 0-indexed
                 'note': int(self.get_input("Note number (0-127)", "60"))
             }
 
@@ -917,12 +971,12 @@ class ConfigMenu:
         self.print_success(f"Static shape '{shape_id}' configured!")
         return shape_config
 
-    def configure_animated_shape(self) -> Dict[str, Any]:
+    def configure_animated_shape(self) -> Optional[Dict[str, Any]]:
         """
         Configure an animated shape.
 
         Returns:
-            Animated shape configuration dict
+            Animated shape configuration dict, or None if cancelled
         """
         self.print_header("Configure Animated Shape")
 
@@ -972,22 +1026,26 @@ class ConfigMenu:
         if self.get_yes_no("Listen for MIDI CC to capture controller?", True):
             self.print_info("Move a fader or knob on your controller to send CC")
             midi_msg = self.listen_for_midi()
-            if midi_msg:
-                control_midi = {
-                    'type': 'cc',
-                    'channel': midi_msg['channel'],
-                    'controller': midi_msg['data1']
-                }
-            else:
-                control_midi = {
-                    'type': 'cc',
-                    'channel': 1,
-                    'controller': 10
-                }
-        else:
+
+            if not midi_msg:
+                # User cancelled or no MIDI found after all retries
+                print()
+                self.print_warning("MIDI capture cancelled - shape not configured")
+                print()
+                input("Press Enter to continue...")
+                return None  # DON'T configure the shape with defaults
+
+            # Use captured MIDI values
             control_midi = {
                 'type': 'cc',
-                'channel': int(self.get_input("MIDI channel (1-16)", "1")),
+                'channel': midi_msg['channel'],
+                'controller': midi_msg['data1']
+            }
+        else:
+            # Manual input path (user chose not to listen)
+            control_midi = {
+                'type': 'cc',
+                'channel': int(self.get_input("MIDI channel (1-16)", "1")) - 1,  # Convert to 0-indexed
                 'controller': int(self.get_input("CC controller (0-127)", "10"))
             }
 
@@ -1886,6 +1944,11 @@ class ConfigMenu:
                 return
             elif choice == str(next_num):
                 shape_config = self.configure_static_shape()
+
+                if shape_config is None:  # Check if configuration was cancelled
+                    # Shape wasn't configured (user cancelled MIDI capture)
+                    continue  # Go back to menu
+
                 preset = self.get_active_preset()
                 if 'shapes' not in preset:
                     preset['shapes'] = {}
@@ -1893,6 +1956,7 @@ class ConfigMenu:
                     preset['shapes']['static'] = []
                 preset['shapes']['static'].append(shape_config)
                 self.mark_unsaved()
+                self.print_success(f"Shape '{shape_config['id']}' added")
                 print()
                 input("Press Enter to continue...")
             elif shapes:
@@ -2093,6 +2157,11 @@ class ConfigMenu:
                 return
             elif choice == str(next_num):
                 shape_config = self.configure_animated_shape()
+
+                if shape_config is None:  # Check if configuration was cancelled
+                    # Shape wasn't configured (user cancelled MIDI capture)
+                    continue  # Go back to menu
+
                 preset = self.get_active_preset()
                 if 'shapes' not in preset:
                     preset['shapes'] = {}
@@ -2100,6 +2169,7 @@ class ConfigMenu:
                     preset['shapes']['animated'] = []
                 preset['shapes']['animated'].append(shape_config)
                 self.mark_unsaved()
+                self.print_success(f"Shape '{shape_config['id']}' added")
                 print()
                 input("Press Enter to continue...")
             elif shapes:
