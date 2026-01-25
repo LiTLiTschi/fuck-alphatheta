@@ -479,26 +479,42 @@ class ConfigMenu:
         self.print_info("Press ESC to cancel")
 
         try:
-            # List available input ports
-            ports = mido.get_input_names()
+            # List available input and output ports
+            input_ports = mido.get_input_names()
+            output_ports = mido.get_output_names()
 
-            if not ports:
+            if not input_ports:
                 self.print_warning("No MIDI input ports found!")
                 return None
 
-            print(f"\n{Fore.CYAN}Available MIDI ports:{Style.RESET_ALL}")
-            for i, port in enumerate(ports):
-                print(f"  {i+1}. {port}")
+            # Display both input and output ports side-by-side
+            print()
+            print(f"{Fore.CYAN}{'MIDI INPUT PORTS':<50} {'MIDI OUTPUT PORTS':>50}{Style.RESET_ALL}")
+            print("=" * 100)
+
+            # Show ports side-by-side
+            max_rows = max(len(input_ports), len(output_ports))
+            for i in range(max_rows):
+                left = f"  {i+1}. {input_ports[i]}" if i < len(input_ports) else ""
+                right = f"  {i+1}. {output_ports[i]}" if i < len(output_ports) else ""
+                print(f"{left:<50} {right:>50}")
+
+            print()
+            self.print_info("📌 Bome MIDI Routing Tip:")
+            print("   - Bome sends TO: 'Virtual Out' (right column)")
+            print("   - You listen FROM: Corresponding input port (left column)")
+            print("   - Port names may not match exactly - look for 'Bome' or 'MT' in both")
+            print()
 
             # Let user select port
             port_choice = self.get_int_input(
-                f"Select port (1-{len(ports)})",
+                f"Select INPUT port to listen on (1-{len(input_ports)})",
                 1,
                 min_val=1,
-                max_val=len(ports)
+                max_val=len(input_ports)
             )
 
-            selected_port = ports[port_choice - 1]
+            selected_port = input_ports[port_choice - 1]
 
             # Check if this port might be in use
             configured_port = self.config.get('general', {}).get('midi_port', '')
@@ -544,6 +560,14 @@ class ConfigMenu:
 
                     # Poll for messages
                     for msg in midi_port.iter_pending():
+                        # DEBUG: Show all received MIDI
+                        if msg.type in ['note_on', 'note_off', 'control_change']:
+                            print(f"\n{Fore.YELLOW}[DEBUG] Received: {msg.type} | Channel {msg.channel} | ", end='')
+                            if msg.type in ['note_on', 'note_off']:
+                                print(f"Note {msg.note} | Velocity {msg.velocity}{Style.RESET_ALL}")
+                            else:
+                                print(f"CC {msg.control} | Value {msg.value}{Style.RESET_ALL}")
+
                         if msg.type == 'note_on' or msg.type == 'note_off':
                             captured_msg[0] = {
                                 'type': 'note',

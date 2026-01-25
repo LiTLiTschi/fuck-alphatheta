@@ -13,7 +13,7 @@ long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists
 
 setup(
     name="rekordbox-midi-helper",
-    version="1.0.0",
+    version="1.3.5",
     author="LiTLiTschi",
     description="Screen monitoring and MIDI overlay tool for Rekordbox DJ software",
     long_description=long_description,
