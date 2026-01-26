@@ -44,9 +44,52 @@ class AnimatedShapesScreen(Screen):
         # Add columns
         table.add_columns("ID", "Type", "Position", "Size", "MIDI CC", "Animation")
 
-        # TODO: Load actual data
-        # Placeholder data
-        table.add_row("anim_1", "pie_chart", "(300, 300)", "r=80", "Ch1 CC11", "clockwise")
+        # Load actual data
+        self.refresh_table()
+
+    def refresh_table(self) -> None:
+        """Refresh table with current data"""
+        table = self.query_one(DataTable)
+        table.clear()
+
+        shapes = self.app.config_service.get_animated_shapes()
+
+        if not shapes:
+            table.add_row("", "[dim]No animated shapes configured[/]", "", "", "", "")
+        else:
+            for shape in shapes:
+                shape_id = shape.get('id', 'Unknown')
+                shape_type = shape.get('type', 'unknown')
+
+                # Position
+                pos = shape.get('position', {})
+                position = f"({pos.get('x', 0)}, {pos.get('y', 0)})"
+
+                # Size
+                size_data = shape.get('size', {})
+                if 'radius' in size_data:
+                    size = f"r={size_data['radius']}"
+                elif 'width' in size_data and 'height' in size_data:
+                    size = f"{size_data['width']}x{size_data['height']}"
+                else:
+                    size = "?"
+
+                # MIDI CC
+                midi = shape.get('control_midi', {})
+                if isinstance(midi, dict):
+                    midi_str = f"Ch{midi.get('channel', 0)+1} CC{midi.get('controller', 0)}"
+                else:
+                    midi_str = str(midi)
+
+                # Animation
+                animation = shape.get('animation', {})
+                if isinstance(animation, dict):
+                    fill_dir = animation.get('fill_direction', 'unknown')
+                    animation_str = fill_dir
+                else:
+                    animation_str = str(animation)
+
+                table.add_row(shape_id, shape_type, position, size, midi_str, animation_str, key=shape_id)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses"""
@@ -61,12 +104,18 @@ class AnimatedShapesScreen(Screen):
 
     def action_add(self) -> None:
         """Add new animated shape"""
-        self.notify("Add Animated Shape - Coming soon!")
+        self.notify("Add Animated Shape - Coming in Phase 5!")
 
     def action_edit(self) -> None:
         """Edit selected shape"""
-        self.notify("Edit Shape - Coming soon!")
+        self.notify("Edit Shape - Coming in Phase 5!")
 
     def action_delete(self) -> None:
         """Delete selected shape"""
-        self.notify("Delete Shape - Coming soon!")
+        table = self.query_one(DataTable)
+        if table.cursor_row is not None:
+            row_key = table.get_row_at(table.cursor_row)[0]
+            if row_key and row_key != "":
+                self.app.config_service.delete_animated_shape(row_key)
+                self.refresh_table()
+                self.notify(f"✓ Deleted shape '{row_key}'")

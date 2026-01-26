@@ -44,9 +44,51 @@ class MonitorsScreen(Screen):
         # Add columns
         table.add_columns("ID", "Position", "Target Color", "Tolerance", "MIDI")
 
-        # TODO: Load actual data
-        # Placeholder data
-        table.add_row("monitor_1", "(100, 100)", "RGB(255,0,0)", "15", "Ch1 CC10")
+        # Load actual data
+        self.refresh_table()
+
+    def refresh_table(self) -> None:
+        """Refresh table with current data"""
+        table = self.query_one(DataTable)
+        table.clear()
+
+        monitors = self.app.config_service.get_screen_monitors()
+
+        if not monitors:
+            # No data row
+            table.add_row("", "[dim]No monitors configured[/]", "", "", "")
+        else:
+            for monitor in monitors:
+                monitor_id = monitor.get('id', 'Unknown')
+
+                # Position - support both formats
+                if 'position' in monitor:
+                    pos = monitor['position']
+                    position = f"({pos['x']}, {pos['y']})"
+                elif 'region' in monitor:
+                    reg = monitor['region']
+                    position = f"({reg['x']}, {reg['y']})"
+                else:
+                    position = "?"
+
+                # Target color
+                color = monitor.get('target_color', {})
+                if isinstance(color, dict):
+                    target_color = f"RGB({color.get('r', 0)},{color.get('g', 0)},{color.get('b', 0)})"
+                else:
+                    target_color = str(color)
+
+                # Tolerance
+                tolerance = str(monitor.get('tolerance', 0))
+
+                # MIDI output
+                midi = monitor.get('midi_output', {})
+                if isinstance(midi, dict):
+                    midi_str = f"Ch{midi.get('channel', 0)+1} CC{midi.get('controller', 0)}"
+                else:
+                    midi_str = str(midi)
+
+                table.add_row(monitor_id, position, target_color, tolerance, midi_str, key=monitor_id)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses"""

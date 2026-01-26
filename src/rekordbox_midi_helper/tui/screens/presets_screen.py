@@ -45,10 +45,38 @@ class PresetsScreen(Screen):
         # Add columns
         table.add_columns("Name", "Monitors", "Static", "Animated", "Status")
 
-        # TODO: Load actual data
-        # Placeholder data
-        table.add_row("default", "3", "5", "2", "[green]Active[/]")
-        table.add_row("backup", "3", "4", "1", "")
+        # Load actual data
+        self.refresh_display()
+
+    def refresh_display(self) -> None:
+        """Refresh preset display"""
+        # Update active preset label
+        active_preset = self.app.config_service.get_active_preset_name()
+        self.query_one("#active-preset", Static).update(
+            f"Active: [cyan]{active_preset}[/]"
+        )
+
+        # Refresh table
+        table = self.query_one(DataTable)
+        table.clear()
+
+        preset_names = self.app.config_service.get_preset_names()
+
+        for preset_name in preset_names:
+            preset = self.app.config_service.get_preset(preset_name)
+
+            # Count items
+            monitors = len(preset.get('screen_monitors', []))
+            static = len(preset.get('shapes', {}).get('static', []))
+            animated = len(preset.get('shapes', {}).get('animated', []))
+
+            # Status
+            if preset_name == active_preset:
+                status = "[green]● Active[/]"
+            else:
+                status = ""
+
+            table.add_row(preset_name, str(monitors), str(static), str(animated), status, key=preset_name)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses"""
@@ -65,16 +93,34 @@ class PresetsScreen(Screen):
 
     def action_switch(self) -> None:
         """Switch active preset"""
-        self.notify("Switch Preset - Coming soon!")
+        table = self.query_one(DataTable)
+        if table.cursor_row is not None:
+            preset_name = table.get_row_at(table.cursor_row)[0]
+            if preset_name:
+                try:
+                    self.app.config_service.switch_preset(preset_name)
+                    self.refresh_display()
+                    self.notify(f"✓ Switched to preset '{preset_name}'")
+                except ValueError as e:
+                    self.notify(f"✗ {str(e)}", severity="error")
 
     def action_new(self) -> None:
         """Create new preset"""
-        self.notify("New Preset - Coming soon!")
+        self.notify("New Preset - Coming in Phase 5!")
 
     def action_copy(self) -> None:
         """Copy preset"""
-        self.notify("Copy Preset - Coming soon!")
+        self.notify("Copy Preset - Coming in Phase 5!")
 
     def action_delete(self) -> None:
         """Delete preset"""
-        self.notify("Delete Preset - Coming soon!")
+        table = self.query_one(DataTable)
+        if table.cursor_row is not None:
+            preset_name = table.get_row_at(table.cursor_row)[0]
+            if preset_name:
+                try:
+                    self.app.config_service.delete_preset(preset_name)
+                    self.refresh_display()
+                    self.notify(f"✓ Deleted preset '{preset_name}'")
+                except ValueError as e:
+                    self.notify(f"✗ {str(e)}", severity="error")

@@ -45,7 +45,10 @@ class RekordboxConfigApp(App):
     def __init__(self, config_path: str = None):
         super().__init__()
         self.config_path = config_path
-        self.unsaved_changes = False
+
+        # Initialize config service
+        from ..services import ConfigService
+        self.config_service = ConfigService(config_path)
 
     def on_mount(self) -> None:
         """Initialize app on mount"""
@@ -54,15 +57,14 @@ class RekordboxConfigApp(App):
     def action_save_config(self) -> None:
         """Save configuration"""
         try:
-            # TODO: Implement save logic
-            self.unsaved_changes = False
+            self.config_service.save()
             self.notify("✓ Configuration saved", severity="information")
         except Exception as e:
             self.notify(f"✗ Save failed: {e}", severity="error")
 
     def action_request_quit(self) -> None:
         """Quit with unsaved changes check"""
-        if self.unsaved_changes:
+        if self.config_service.has_unsaved_changes():
             # TODO: Show confirmation dialog
             pass
 
