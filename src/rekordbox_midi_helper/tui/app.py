@@ -21,7 +21,7 @@ class RekordboxConfigApp(App):
     """Rekordbox MIDI Helper Configuration TUI"""
 
     TITLE = "Rekordbox MIDI Helper"
-    SUB_TITLE = "v2.0.0 - Modern Configuration Interface"
+    SUB_TITLE = "v2.1.0 - Modern Configuration Interface"
 
     CSS_PATH = "styles/main.tcss"
 
