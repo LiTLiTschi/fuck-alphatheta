@@ -112,12 +112,9 @@ def remove_pid():
 
 
 def cmd_config(args):
-    """Run the configuration menu."""
-    from .configure import ConfigMenu
+    """Run the configuration TUI."""
+    from .tui import RekordboxConfigApp
     from .utils.config_path import ensure_config_exists
-
-    print_info("Starting configuration menu...")
-    print()
 
     # Use ~/.config/fucka/config.yaml (or custom path if provided)
     if hasattr(args, 'config') and args.config:
@@ -125,13 +122,13 @@ def cmd_config(args):
     else:
         config_path = str(ensure_config_exists())
 
-    menu = ConfigMenu(config_path)
+    app = RekordboxConfigApp(config_path)
 
     try:
-        menu.run()
+        app.run()
     except KeyboardInterrupt:
         print("\n")
-        print_warning("Configuration menu cancelled")
+        print_warning("Configuration cancelled")
         sys.exit(1)
 
 

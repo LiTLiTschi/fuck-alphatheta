@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rekordbox-midi-helper"
-version = "1.4.5"
-description = "Screen monitoring and MIDI overlay tool for Rekordbox DJ software"
+version = "2.0.0"
+description = "Screen monitoring and MIDI overlay tool for Rekordbox DJ software with modern TUI"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -32,9 +32,10 @@ dependencies = [
     "mss>=9.0.0",
     "PyYAML>=6.0",
     "numpy>=1.24.0",
-    "colorama>=0.4.6",
     "pynput>=1.7.6",
     "psutil>=5.9.0",
+    "textual>=0.50.0",
+    "rich>=13.7.0",
 ]
 
 [project.urls]

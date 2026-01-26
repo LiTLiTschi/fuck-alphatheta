@@ -7,7 +7,7 @@ Bome MIDI Translator Pro, designed to work around hardware limitations.
 Copyright (c) 2026 LiTLiTschi
 """
 
-__version__ = "1.4.5"
+__version__ = "2.0.0"
 __author__ = "LiTLiTschi"
 
 # Expose main classes for programmatic usage
