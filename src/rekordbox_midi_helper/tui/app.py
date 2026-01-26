@@ -62,11 +62,20 @@ class RekordboxConfigApp(App):
         except Exception as e:
             self.notify(f"✗ Save failed: {e}", severity="error")
 
-    def action_request_quit(self) -> None:
+    async def action_request_quit(self) -> None:
         """Quit with unsaved changes check"""
         if self.config_service.has_unsaved_changes():
-            # TODO: Show confirmation dialog
-            pass
+            from .modals.confirm_dialog import ConfirmDialog
+
+            confirmed = await self.push_screen_wait(
+                ConfirmDialog(
+                    "Quit without saving?",
+                    "You have unsaved changes that will be lost."
+                )
+            )
+
+            if not confirmed:
+                return
 
         self.exit()
 
