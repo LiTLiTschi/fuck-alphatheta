@@ -27,7 +27,7 @@ class MainMenuScreen(Screen):
             with Center():
                 with Vertical(id="menu"):
                     yield Static("Rekordbox MIDI Helper", id="title")
-                    yield Static("Configuration Tool v2.0.0", id="subtitle")
+                    yield Static("Configuration Tool v2.1.0", id="subtitle")
                     yield Static("", id="spacer")
 
                     yield Button("⚙️  General Settings", id="btn-general", variant="primary")
