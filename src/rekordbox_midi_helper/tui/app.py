@@ -6,7 +6,15 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Header, Footer
 
-from .screens.main_menu import MainMenuScreen
+from .screens import (
+    MainMenuScreen,
+    GeneralSettingsScreen,
+    MonitorsScreen,
+    StaticShapesScreen,
+    AnimatedShapesScreen,
+    TestValidateScreen,
+    PresetsScreen,
+)
 
 
 class RekordboxConfigApp(App):
@@ -26,6 +34,12 @@ class RekordboxConfigApp(App):
 
     SCREENS = {
         "main_menu": MainMenuScreen,
+        "general_settings": GeneralSettingsScreen,
+        "monitors": MonitorsScreen,
+        "static_shapes": StaticShapesScreen,
+        "animated_shapes": AnimatedShapesScreen,
+        "test_validate": TestValidateScreen,
+        "presets": PresetsScreen,
     }
 
     def __init__(self, config_path: str = None):

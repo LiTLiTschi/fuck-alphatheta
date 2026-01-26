@@ -43,16 +43,16 @@ class MainMenuScreen(Screen):
         button_id = event.button.id
 
         if button_id == "btn-general":
-            self.notify("General Settings - Coming soon!")
+            self.app.push_screen("general_settings")
         elif button_id == "btn-monitors":
-            self.notify("Screen Monitors - Coming soon!")
+            self.app.push_screen("monitors")
         elif button_id == "btn-static":
-            self.notify("Static Shapes - Coming soon!")
+            self.app.push_screen("static_shapes")
         elif button_id == "btn-animated":
-            self.notify("Animated Shapes - Coming soon!")
+            self.app.push_screen("animated_shapes")
         elif button_id == "btn-test":
-            self.notify("Test & Validate - Coming soon!")
+            self.app.push_screen("test_validate")
         elif button_id == "btn-presets":
-            self.notify("Manage Presets - Coming soon!")
+            self.app.push_screen("presets")
         elif button_id == "btn-exit":
             self.app.action_request_quit()
