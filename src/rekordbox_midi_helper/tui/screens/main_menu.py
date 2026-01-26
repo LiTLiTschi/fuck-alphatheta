@@ -21,6 +21,9 @@ class MainMenuScreen(Screen):
         yield Header()
 
         with Container(id="main-container"):
+            # Update notification banner (initially hidden)
+            yield Static("", id="update-banner", classes="hidden")
+
             with Center():
                 with Vertical(id="menu"):
                     yield Static("Rekordbox MIDI Helper", id="title")
@@ -37,6 +40,40 @@ class MainMenuScreen(Screen):
                     yield Button("❌ Exit", id="btn-exit", variant="error")
 
         yield Footer()
+
+    def on_mount(self) -> None:
+        """Check for updates when screen is mounted"""
+        self._check_for_updates()
+
+    def _check_for_updates(self) -> None:
+        """Check for updates and display banner if available"""
+        try:
+            from ...utils.update_checker import UpdateChecker
+            from ... import __version__
+
+            checker = UpdateChecker()
+            cached_info = checker.get_cached_update_info()
+
+            if not cached_info:
+                return  # No cached info
+
+            if checker.is_cache_expired(cached_info):
+                return  # Cache expired
+
+            if not cached_info.get("update_available"):
+                return  # No update available
+
+            # Show update notification
+            latest = cached_info.get("latest_version", "unknown")
+            channel = cached_info.get("channel", "unknown")
+
+            banner = self.query_one("#update-banner", Static)
+            banner.update(f"🔔 Update available: {latest} ({channel}) - Run 'fucka update' to upgrade")
+            banner.remove_class("hidden")
+            banner.add_class("update-available")
+        except Exception:
+            # Silently fail
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses"""

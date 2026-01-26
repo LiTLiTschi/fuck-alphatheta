@@ -266,3 +266,63 @@ class ConfigService:
                 self.mark_unsaved()
                 return True
         return False
+
+    # ===== Update Settings =====
+
+    def get_update_settings(self) -> Dict[str, Any]:
+        """Get all update settings"""
+        general = self.config_loader.config.get('general', {})
+        return {
+            'auto_check_updates': general.get('auto_check_updates', True),
+            'update_check_interval_hours': general.get('update_check_interval_hours', 24),
+            'update_channel': general.get('update_channel', 'dev'),
+            'update_notify_cli': general.get('update_notify_cli', True),
+            'update_notify_tui': general.get('update_notify_tui', True)
+        }
+
+    def should_check_for_updates(self) -> bool:
+        """Check if auto-update checking is enabled"""
+        return self.config_loader.config.get('general', {}).get('auto_check_updates', True)
+
+    def get_update_check_interval(self) -> int:
+        """Get update check interval in hours"""
+        return self.config_loader.config.get('general', {}).get('update_check_interval_hours', 24)
+
+    def get_update_channel(self) -> str:
+        """Get update channel ('stable' or 'dev')"""
+        return self.config_loader.config.get('general', {}).get('update_channel', 'dev')
+
+    def get_update_notify_cli(self) -> bool:
+        """Check if CLI update notifications are enabled"""
+        return self.config_loader.config.get('general', {}).get('update_notify_cli', True)
+
+    def get_update_notify_tui(self) -> bool:
+        """Check if TUI update notifications are enabled"""
+        return self.config_loader.config.get('general', {}).get('update_notify_tui', True)
+
+    def set_auto_check_updates(self, enabled: bool) -> None:
+        """Enable/disable automatic update checking"""
+        self.config_loader.config['general']['auto_check_updates'] = enabled
+        self.mark_unsaved()
+
+    def set_update_check_interval(self, hours: int) -> None:
+        """Set update check interval in hours"""
+        self.config_loader.config['general']['update_check_interval_hours'] = hours
+        self.mark_unsaved()
+
+    def set_update_channel(self, channel: str) -> None:
+        """Set update channel ('stable' or 'dev')"""
+        if channel not in ['stable', 'dev']:
+            raise ValueError("Channel must be 'stable' or 'dev'")
+        self.config_loader.config['general']['update_channel'] = channel
+        self.mark_unsaved()
+
+    def set_update_notify_cli(self, enabled: bool) -> None:
+        """Enable/disable CLI update notifications"""
+        self.config_loader.config['general']['update_notify_cli'] = enabled
+        self.mark_unsaved()
+
+    def set_update_notify_tui(self, enabled: bool) -> None:
+        """Enable/disable TUI update notifications"""
+        self.config_loader.config['general']['update_notify_tui'] = enabled
+        self.mark_unsaved()

@@ -165,6 +165,51 @@ DataTable > .datatable--header {
     content-align: center middle;
 }
 
+/* Update Notification Banner */
+#update-banner {
+    width: 100%;
+    padding: 1 2;
+    margin-bottom: 2;
+    content-align: center middle;
+    background: $warning;
+    color: #000000;
+    text-style: bold;
+}
+
+#update-banner.hidden {
+    display: none;
+}
+
+#update-banner.update-available {
+    background: $warning;
+    color: #000000;
+}
+
+/* Updates Section */
+#updates-spacer {
+    height: 1;
+}
+
+#updates-title {
+    width: 100%;
+    content-align: left middle;
+    text-style: bold;
+    color: $primary;
+    margin-top: 2;
+    margin-bottom: 1;
+}
+
+#updates-section {
+    border: solid $primary;
+    padding: 2;
+    margin-bottom: 2;
+    height: auto;
+}
+
+#updates-section > Static {
+    margin-bottom: 1;
+}
+
 /* Color Scheme */
 $primary: #00d9ff;
 $primary-darken-1: #00a8cc;

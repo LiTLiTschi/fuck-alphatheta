@@ -413,21 +413,72 @@ def cmd_monitor(args):
 
 def cmd_update(args):
     """Update fucka to the latest version from GitHub."""
-    print_info("Updating fucka from GitHub...")
+    from . import __version__ as current_version
+    from .utils.update_checker import UpdateChecker
+    from .utils.config_path import ensure_fucka_dir
 
-    # Determine which branch to use
-    # Default to feature branch (where active development is)
+    # Determine channel and branch
+    channel = "dev" if args.dev or args.branch else "dev"  # Default to dev for now
     branch = args.branch if hasattr(args, 'branch') and args.branch else 'claude/rekordbox-midi-python-script-FuBNl'
+
+    # Check for updates first
+    try:
+        print_info("Checking for updates...")
+        checker = UpdateChecker()
+        update_info = checker.check_for_updates(
+            current_version=current_version,
+            channel=channel,
+            branch=branch,
+            force=True  # Always force check on manual update command
+        )
+    except Exception as e:
+        print_warning(f"Could not check for updates: {e}")
+        if not args.yes:
+            response = input("Continue with update anyway? [y/N]: ")
+            if response.lower() != 'y':
+                print_info("Update cancelled")
+                return
+        update_info = None
+
+    # If --check flag, just display info and exit
+    if hasattr(args, 'check') and args.check:
+        print()
+        _display_update_info(update_info, current_version)
+        return
+
+    # Display update information
+    if update_info:
+        print()
+        _display_update_info(update_info, current_version)
+        print()
+
+        # Prompt for confirmation unless --yes
+        if not args.yes:
+            if channel == "dev":
+                response = input("Update to latest development version? [Y/n]: ")
+            else:
+                response = input("Continue with update? [Y/n]: ")
+
+            if response.lower() == 'n':
+                print_info("Update cancelled")
+                return
+
+    # Perform update
+    print()
+    print_info("Updating fucka from GitHub...")
 
     # Build install command
     url = f"git+https://github.com/LiTLiTschi/fuck-alphatheta.git@{branch}"
 
     try:
-        # Get current version before update
-        from . import __version__ as current_version
-
         # Check if uv is available
         uv_path = shutil.which("uv")
+
+        # Determine install flags
+        if args.force:
+            install_flag = "--force-reinstall"  # Old behavior: reinstall all deps
+        else:
+            install_flag = "--upgrade"  # New behavior: only update fucka
 
         if os.name == 'nt':  # Windows
             # On Windows, fucka.exe cannot update itself while running
@@ -440,9 +491,9 @@ def cmd_update(args):
             update_script = Path.home() / ".config" / "fucka" / "update_fucka.bat"
 
             if uv_path:
-                install_cmd = f'uv pip install --force-reinstall "{url}"'
+                install_cmd = f'uv pip install {install_flag} "{url}"'
             else:
-                install_cmd = f'"{sys.executable}" -m pip install --force-reinstall "{url}"'
+                install_cmd = f'"{sys.executable}" -m pip install {install_flag} "{url}"'
 
             batch_content = f'''@echo off
 echo Updating fucka from branch: {branch}
@@ -487,10 +538,10 @@ del "%~f0"
             # On Linux/Mac we can update directly
             if uv_path:
                 print_info(f"Using uv to install from branch: {branch}")
-                cmd = ["uv", "pip", "install", "--force-reinstall", url]
+                cmd = ["uv", "pip", "install", install_flag, url]
             else:
                 print_info(f"Using pip to install from branch: {branch}")
-                cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", url]
+                cmd = [sys.executable, "-m", "pip", "install", install_flag, url]
 
             print_info(f"Running: {' '.join(cmd)}")
 
@@ -520,6 +571,19 @@ del "%~f0"
 
                 print()
                 print_info("Restart any running fucka instances for changes to take effect")
+
+                # Update cache after successful update
+                try:
+                    checker.save_update_cache({
+                        "update_available": False,
+                        "current_version": new_version if 'new_version' in locals() else current_version,
+                        "latest_version": new_version if 'new_version' in locals() else current_version,
+                        "last_check_timestamp": int(__import__('time').time()),
+                        "check_interval_hours": 24
+                    })
+                except:
+                    pass
+
             else:
                 print_error("Update failed")
                 sys.exit(1)
@@ -527,6 +591,88 @@ del "%~f0"
     except Exception as e:
         print_error(f"Update failed: {e}")
         sys.exit(1)
+
+
+def _display_update_info(update_info, current_version):
+    """Display update information to user"""
+    if not update_info:
+        print_info(f"Current version: {current_version}")
+        print_warning("Could not check for updates")
+        return
+
+    if update_info.get("error"):
+        print_info(f"Current version: {current_version}")
+        print_warning(f"Update check failed: {update_info['error']}")
+        return
+
+    channel = update_info.get("channel", "unknown")
+    latest_version = update_info.get("latest_version", "unknown")
+
+    print_info(f"Current version: {current_version}")
+    print_info(f"Latest version:  {latest_version} ({channel} channel)")
+
+    if update_info.get("update_available"):
+        print()
+        print_success("Update available!")
+
+        if update_info.get("release_notes"):
+            print()
+            print("Release Notes:")
+            print("─" * 50)
+            notes = update_info["release_notes"]
+            # Truncate if too long
+            if len(notes) > 500:
+                notes = notes[:500] + "...\n(see full notes at release URL)"
+            print(notes)
+            print("─" * 50)
+
+        if update_info.get("release_url"):
+            print()
+            print_info(f"Details: {update_info['release_url']}")
+
+    else:
+        print()
+        print_success("You are up to date!")
+
+    if channel == "dev" and update_info.get("latest_commit_sha"):
+        print()
+        print_info(f"Latest commit: {update_info['latest_commit_sha'][:8]}")
+
+
+def _check_and_notify_update():
+    """Check for updates and display notification banner if available (non-blocking)"""
+    try:
+        from . import __version__
+        from .utils.update_checker import UpdateChecker
+
+        # Quick cache check only (don't hit API on every startup)
+        checker = UpdateChecker()
+        cached_info = checker.get_cached_update_info()
+
+        if not cached_info:
+            return  # No cached info, skip notification
+
+        if checker.is_cache_expired(cached_info):
+            return  # Cache expired, don't show stale info
+
+        if not cached_info.get("update_available"):
+            return  # No update available
+
+        # Display update notification banner
+        latest = cached_info.get("latest_version", "unknown")
+        current = __version__
+        channel = cached_info.get("channel", "unknown")
+
+        print()
+        print("╔" + "═" * 54 + "╗")
+        print(f"║  🔔 Update Available: {latest:20} ({channel:6} channel)  ║")
+        print(f"║     Current version: {current:20}                    ║")
+        print("║     Run 'fucka update' to upgrade                    ║")
+        print("╚" + "═" * 54 + "╝")
+        print()
+    except Exception:
+        # Silently fail if update check fails
+        pass
 
 
 def main():
@@ -608,10 +754,23 @@ Examples:
     parser_update = subparsers.add_parser('update', help='Update fucka to latest version from GitHub')
     parser_update.add_argument('--branch', '-b', type=str, default=None,
                                help='Git branch to install from (default: claude/rekordbox-midi-python-script-FuBNl)')
+    parser_update.add_argument('--check', '-c', action='store_true',
+                               help='Check for updates without installing')
+    parser_update.add_argument('--force', '-f', action='store_true',
+                               help='Force reinstall all dependencies (slower)')
+    parser_update.add_argument('--dev', '-d', action='store_true',
+                               help='Use development channel (latest commits)')
+    parser_update.add_argument('--yes', '-y', action='store_true',
+                               help='Skip confirmation prompts')
     parser_update.set_defaults(func=cmd_update)
 
     # Parse arguments
     args = parser.parse_args()
+
+    # Check for updates and show notification (non-blocking, cache-based)
+    # Skip for update command itself to avoid redundancy
+    if args.command != 'update':
+        _check_and_notify_update()
 
     # Show help if no command specified
     if not args.command:

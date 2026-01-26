@@ -32,6 +32,24 @@ general:
   # You can create multiple presets and switch between them in the config menu
   active_preset: "default"
 
+  # Update Settings
+  # Automatically check for updates on CLI/TUI startup
+  auto_check_updates: true
+
+  # How often to check for updates (in hours)
+  update_check_interval_hours: 24
+
+  # Update channel: "stable" (releases) or "dev" (latest commits)
+  # stable = official releases with version tags
+  # dev = latest development commits (may be unstable)
+  update_channel: "dev"
+
+  # Show update notifications in CLI
+  update_notify_cli: true
+
+  # Show update notifications in TUI
+  update_notify_tui: true
+
 # Presets - Multiple configurations you can switch between
 # Each preset has its own screen monitors and shapes
 # Useful for different scenarios (e.g., "deck_a_only", "both_decks", "effects_mode")
