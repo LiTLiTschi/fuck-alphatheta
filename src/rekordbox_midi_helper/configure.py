@@ -84,6 +84,10 @@ class ConfigMenu:
         # Screen capture
         self.sct = mss.mss()
 
+        # Shape preview state
+        self.shape_preview_window: Optional['ShapePreviewWindow'] = None
+        self.preview_app: Optional['QApplication'] = None
+
     def init_default_config(self):
         """Initialize default configuration structure with presets."""
         self.config: Dict[str, Any] = {
@@ -285,6 +289,24 @@ class ConfigMenu:
         """Print success message."""
         print(f"{Fore.GREEN}✓ {text}{Style.RESET_ALL}")
 
+    def handle_global_commands(self, choice: str) -> Optional[str]:
+        """
+        Handle global menu commands available in all menus.
+
+        Args:
+            choice: User's input choice
+
+        Returns:
+            'exit' if should quit, 'saved' if saved, None if not a global command
+        """
+        if choice == 'q':
+            if self.confirm_exit():
+                return 'exit'
+        elif choice == 's':
+            self.save_config()
+            return 'saved'
+        return None
+
     def get_input(self, prompt: str, default: str = "") -> str:
         """Get user input with optional default."""
         if default:
@@ -462,6 +484,64 @@ class ConfigMenu:
             return color
 
         return (0, 0, 0)
+
+    def show_shape_preview(self, shape_config: Dict[str, Any]) -> None:
+        """
+        Show a live preview of the shape being configured.
+
+        Args:
+            shape_config: Shape configuration (id, type, position, size, color)
+        """
+        from PyQt5.QtWidgets import QApplication
+        from .shape_preview import ShapePreviewWindow
+
+        # Initialize Qt app if needed (but don't block terminal)
+        if self.preview_app is None:
+            self.preview_app = QApplication.instance()
+            if self.preview_app is None:
+                self.preview_app = QApplication([])
+
+        # Close existing preview if any
+        if self.shape_preview_window is not None:
+            self.shape_preview_window.close()
+            self.shape_preview_window = None
+
+        # Create and show new preview
+        self.shape_preview_window = ShapePreviewWindow(shape_config)
+        self.shape_preview_window.show()
+
+        # Process events to show window without blocking
+        self.preview_app.processEvents()
+
+        self.print_success("Shape preview is now visible on screen")
+
+    def hide_shape_preview(self) -> None:
+        """
+        Hide and cleanup the shape preview window.
+        """
+        if self.shape_preview_window is not None:
+            self.shape_preview_window.close()
+            self.shape_preview_window = None
+
+            # Process events to ensure cleanup
+            if self.preview_app is not None:
+                self.preview_app.processEvents()
+
+            self.print_info("Shape preview closed")
+
+    def update_shape_preview(self, shape_config: Dict[str, Any]) -> None:
+        """
+        Update the existing shape preview with new configuration.
+
+        Args:
+            shape_config: Updated shape configuration
+        """
+        if self.shape_preview_window is not None:
+            # Recreate the preview with new config
+            self.show_shape_preview(shape_config)
+        else:
+            # If no preview exists, just show it
+            self.show_shape_preview(shape_config)
 
     def _scan_all_ports_simultaneously(self, input_ports: List[str], scan_time: int = 10) -> Tuple[Optional[str], Optional[Any]]:
         """
@@ -932,6 +1012,16 @@ class ConfigMenu:
             'a': int(self.get_input("Alpha/Opacity (0-255)", "200"))
         }
 
+        # Show live preview of the shape
+        preview_config = {
+            'id': shape_id,
+            'type': shape_type,
+            'position': position,
+            'size': size,
+            'color': color
+        }
+        self.show_shape_preview(preview_config)
+
         # MIDI trigger
         print(f"\n{Fore.CYAN}Configure MIDI trigger:{Style.RESET_ALL}")
         if self.get_yes_no("Listen for MIDI to capture trigger?", True):
@@ -939,6 +1029,7 @@ class ConfigMenu:
 
             if not midi_msg:
                 # User cancelled or no MIDI found after all retries
+                self.hide_shape_preview()  # Hide preview on cancellation
                 print()
                 self.print_warning("MIDI capture cancelled - shape not configured")
                 print()
@@ -958,6 +1049,9 @@ class ConfigMenu:
                 'channel': int(self.get_input("MIDI channel (1-16)", "1")) - 1,  # Convert to 0-indexed
                 'note': int(self.get_input("Note number (0-127)", "60"))
             }
+
+        # Hide preview now that MIDI is assigned
+        self.hide_shape_preview()
 
         shape_config = {
             'id': shape_id,
@@ -1021,6 +1115,16 @@ class ConfigMenu:
             'a': int(self.get_input("Alpha/Opacity (0-255)", "180"))
         }
 
+        # Show live preview of the shape
+        preview_config = {
+            'id': shape_id,
+            'type': shape_type,
+            'position': position,
+            'size': size,
+            'color': color
+        }
+        self.show_shape_preview(preview_config)
+
         # MIDI control
         print(f"\n{Fore.CYAN}Configure MIDI CC control:{Style.RESET_ALL}")
         if self.get_yes_no("Listen for MIDI CC to capture controller?", True):
@@ -1029,6 +1133,7 @@ class ConfigMenu:
 
             if not midi_msg:
                 # User cancelled or no MIDI found after all retries
+                self.hide_shape_preview()  # Hide preview on cancellation
                 print()
                 self.print_warning("MIDI capture cancelled - shape not configured")
                 print()
@@ -1048,6 +1153,9 @@ class ConfigMenu:
                 'channel': int(self.get_input("MIDI channel (1-16)", "1")) - 1,  # Convert to 0-indexed
                 'controller': int(self.get_input("CC controller (0-127)", "10"))
             }
+
+        # Hide preview now that MIDI is assigned
+        self.hide_shape_preview()
 
         # Animation parameters
         if shape_type == 'pie_chart':
@@ -1145,15 +1253,16 @@ class ConfigMenu:
         animated_count = len(preset.get('shapes', {}).get('animated', []))
 
         # Display menu options
-        print(f"1. General Settings")
-        print(f"2. Screen Monitors ({monitor_count} items)")
-        print(f"3. Static Shapes ({static_count} items)")
-        print(f"4. Animated Shapes ({animated_count} items)")
-        print(f"5. Test & Validate")
-        print(f"6. Save Configuration")
-        print(f"7. Load Configuration")
-        print(f"8. Manage Presets")
-        print(f"q. Exit")
+        print(f"{Fore.CYAN}[1]{Style.RESET_ALL} General Settings")
+        print(f"{Fore.CYAN}[2]{Style.RESET_ALL} Screen Monitors ({monitor_count} items)")
+        print(f"{Fore.CYAN}[3]{Style.RESET_ALL} Static Shapes ({static_count} items)")
+        print(f"{Fore.CYAN}[4]{Style.RESET_ALL} Animated Shapes ({animated_count} items)")
+        print(f"{Fore.CYAN}[5]{Style.RESET_ALL} Test & Validate")
+        print(f"{Fore.CYAN}[6]{Style.RESET_ALL} Save Configuration")
+        print(f"{Fore.CYAN}[7]{Style.RESET_ALL} Load Configuration")
+        print(f"{Fore.CYAN}[8]{Style.RESET_ALL} Manage Presets")
+        print(f"{Fore.GREEN}[s]{Style.RESET_ALL} Save")
+        print(f"{Fore.RED}[q]{Style.RESET_ALL} Exit")
 
         # Show status bar
         self.print_status_bar()
@@ -1319,13 +1428,23 @@ class ConfigMenu:
                 print(f"  4. MIDI Input Port (Bome/Hardware): {Fore.YELLOW}(not configured){Style.RESET_ALL}")
 
             print(f"\n{Fore.CYAN}[Actions]{Style.RESET_ALL}\n")
-            print("  5. Edit setting")
-            print("  b. Back to Main Menu")
+            print(f"  {Fore.CYAN}[5]{Style.RESET_ALL} Edit setting")
+            print(f"  {Fore.GREEN}[s]{Style.RESET_ALL} Save")
+            print(f"  {Fore.YELLOW}[b]{Style.RESET_ALL} Back to Main Menu")
+            print(f"  {Fore.RED}[q]{Style.RESET_ALL} Quit")
 
             self.print_status_bar()
 
             print()
             choice = input("Enter choice (s to save): ").strip().lower()
+
+            # Handle global commands (q to quit, s to save)
+            global_result = self.handle_global_commands(choice)
+            if global_result == 'exit':
+                self.menu_stack.pop()
+                return
+            elif global_result == 'saved':
+                continue  # Redraw menu after save
 
             if choice == 's':
                 self.save_config()
@@ -1425,14 +1544,16 @@ class ConfigMenu:
             # Actions menu
             print(f"{Fore.CYAN}[Actions]{Style.RESET_ALL}\n")
             next_num = len(monitors) + 1
-            print(f"  {next_num}. Add new monitor")
+            print(f"  {Fore.CYAN}[{next_num}]{Style.RESET_ALL} Add new monitor")
 
             if monitors:
-                print(f"  {next_num + 1}. Edit monitor")
-                print(f"  {next_num + 2}. Delete monitor")
-                print(f"  {next_num + 3}. Reorder monitors")
+                print(f"  {Fore.CYAN}[{next_num + 1}]{Style.RESET_ALL} Edit monitor")
+                print(f"  {Fore.CYAN}[{next_num + 2}]{Style.RESET_ALL} Delete monitor")
+                print(f"  {Fore.CYAN}[{next_num + 3}]{Style.RESET_ALL} Reorder monitors")
 
-            print(f"  b. Back to Main Menu")
+            print(f"  {Fore.GREEN}[s]{Style.RESET_ALL} Save")
+            print(f"  {Fore.YELLOW}[b]{Style.RESET_ALL} Back to Main Menu")
+            print(f"  {Fore.RED}[q]{Style.RESET_ALL} Quit")
 
             # Show status bar
             self.print_status_bar()
@@ -1440,6 +1561,14 @@ class ConfigMenu:
             # Get choice
             print()
             choice = input(f"Enter choice (s to save): ").strip().lower()
+
+            # Handle global commands (q to quit, s to save)
+            global_result = self.handle_global_commands(choice)
+            if global_result == 'exit':
+                self.menu_stack.pop()
+                return
+            elif global_result == 'saved':
+                continue  # Redraw menu after save
 
             # Handle choice
             if choice == 's':
@@ -1921,19 +2050,29 @@ class ConfigMenu:
             # Actions menu
             print(f"{Fore.CYAN}[Actions]{Style.RESET_ALL}\n")
             next_num = len(shapes) + 1
-            print(f"  {next_num}. Add new shape")
+            print(f"  {Fore.CYAN}[{next_num}]{Style.RESET_ALL} Add new shape")
 
             if shapes:
-                print(f"  {next_num + 1}. Edit shape")
-                print(f"  {next_num + 2}. Delete shape")
-                print(f"  {next_num + 3}. Reorder shapes")
+                print(f"  {Fore.CYAN}[{next_num + 1}]{Style.RESET_ALL} Edit shape")
+                print(f"  {Fore.CYAN}[{next_num + 2}]{Style.RESET_ALL} Delete shape")
+                print(f"  {Fore.CYAN}[{next_num + 3}]{Style.RESET_ALL} Reorder shapes")
 
-            print(f"  b. Back to Main Menu")
+            print(f"  {Fore.GREEN}[s]{Style.RESET_ALL} Save")
+            print(f"  {Fore.YELLOW}[b]{Style.RESET_ALL} Back to Main Menu")
+            print(f"  {Fore.RED}[q]{Style.RESET_ALL} Quit")
 
             self.print_status_bar()
 
             print()
             choice = input("Enter choice (s to save): ").strip().lower()
+
+            # Handle global commands (q to quit, s to save)
+            global_result = self.handle_global_commands(choice)
+            if global_result == 'exit':
+                self.menu_stack.pop()
+                return
+            elif global_result == 'saved':
+                continue  # Redraw menu after save
 
             if choice == 's':
                 self.save_config()
@@ -2134,19 +2273,29 @@ class ConfigMenu:
             # Actions menu
             print(f"{Fore.CYAN}[Actions]{Style.RESET_ALL}\n")
             next_num = len(shapes) + 1
-            print(f"  {next_num}. Add new shape")
+            print(f"  {Fore.CYAN}[{next_num}]{Style.RESET_ALL} Add new shape")
 
             if shapes:
-                print(f"  {next_num + 1}. Edit shape")
-                print(f"  {next_num + 2}. Delete shape")
-                print(f"  {next_num + 3}. Reorder shapes")
+                print(f"  {Fore.CYAN}[{next_num + 1}]{Style.RESET_ALL} Edit shape")
+                print(f"  {Fore.CYAN}[{next_num + 2}]{Style.RESET_ALL} Delete shape")
+                print(f"  {Fore.CYAN}[{next_num + 3}]{Style.RESET_ALL} Reorder shapes")
 
-            print(f"  b. Back to Main Menu")
+            print(f"  {Fore.GREEN}[s]{Style.RESET_ALL} Save")
+            print(f"  {Fore.YELLOW}[b]{Style.RESET_ALL} Back to Main Menu")
+            print(f"  {Fore.RED}[q]{Style.RESET_ALL} Quit")
 
             self.print_status_bar()
 
             print()
             choice = input("Enter choice (s to save): ").strip().lower()
+
+            # Handle global commands (q to quit, s to save)
+            global_result = self.handle_global_commands(choice)
+            if global_result == 'exit':
+                self.menu_stack.pop()
+                return
+            elif global_result == 'saved':
+                continue  # Redraw menu after save
 
             if choice == 's':
                 self.save_config()
@@ -2318,16 +2467,26 @@ class ConfigMenu:
             self.print_menu_header("Test & Validate")
 
             print(f"{Fore.CYAN}[Test Options]{Style.RESET_ALL}\n")
-            print("  1. Test MIDI connections")
-            print("  2. Validate configuration")
-            print("  3. Live preview monitors")
-            print("  4. Debug shapes (test overlay)")
-            print("  b. Back to Main Menu")
+            print(f"  {Fore.CYAN}[1]{Style.RESET_ALL} Test MIDI connections")
+            print(f"  {Fore.CYAN}[2]{Style.RESET_ALL} Validate configuration")
+            print(f"  {Fore.CYAN}[3]{Style.RESET_ALL} Live preview monitors")
+            print(f"  {Fore.CYAN}[4]{Style.RESET_ALL} Debug shapes (test overlay)")
+            print(f"  {Fore.GREEN}[s]{Style.RESET_ALL} Save")
+            print(f"  {Fore.YELLOW}[b]{Style.RESET_ALL} Back to Main Menu")
+            print(f"  {Fore.RED}[q]{Style.RESET_ALL} Quit")
 
             self.print_status_bar()
 
             print()
             choice = input("Enter choice: ").strip().lower()
+
+            # Handle global commands (q to quit, s to save)
+            global_result = self.handle_global_commands(choice)
+            if global_result == 'exit':
+                self.menu_stack.pop()
+                return
+            elif global_result == 'saved':
+                continue  # Redraw menu after save
 
             if choice == 'b' or choice == '0':
                 break
@@ -2584,7 +2743,7 @@ class ConfigMenu:
             from PyQt5.QtWidgets import QApplication
             from PyQt5.QtCore import QTimer
             from .overlay_window import OverlayWindow
-            from .utils.threading_utils import ThreadSafeQueue, ShutdownEvent
+            from .utils.threading_utils import ThreadSafeQueue
 
             # Create Qt application
             app = QApplication.instance()
@@ -2602,22 +2761,15 @@ class ConfigMenu:
             }
 
             midi_queue = ThreadSafeQueue()
-            shutdown_event = ShutdownEvent()
 
             overlay = OverlayWindow(
-                static_shapes=[test_shape],
-                animated_shapes=[],
+                shapes_config={'static': [test_shape], 'animated': []},
                 midi_input_queue=midi_queue,
-                shutdown_event=shutdown_event,
                 debug=True
             )
 
             # Show the overlay
             overlay.show()
-
-            # Force the test shape to be visible
-            overlay.shape_states[test_shape['id']] = True
-            overlay.update()
 
             self.print_success("Test shape created - it should be visible now!")
             self.print_info("Red circle at position (100, 100) with radius 50")
@@ -2698,17 +2850,27 @@ class ConfigMenu:
 
             print()
             print(f"{Fore.CYAN}[Actions]{Style.RESET_ALL}\n")
-            print("  s. Switch preset")
-            print("  n. Create new preset")
-            print("  c. Copy preset")
-            print("  d. Delete preset")
-            print("  r. Rename preset")
-            print("  b. Back to Main Menu")
+            print(f"  {Fore.CYAN}[s]{Style.RESET_ALL} Switch preset")
+            print(f"  {Fore.CYAN}[n]{Style.RESET_ALL} Create new preset")
+            print(f"  {Fore.CYAN}[c]{Style.RESET_ALL} Copy preset")
+            print(f"  {Fore.CYAN}[d]{Style.RESET_ALL} Delete preset")
+            print(f"  {Fore.CYAN}[r]{Style.RESET_ALL} Rename preset")
+            print(f"  {Fore.GREEN}[S]{Style.RESET_ALL} Save config")
+            print(f"  {Fore.YELLOW}[b]{Style.RESET_ALL} Back to Main Menu")
+            print(f"  {Fore.RED}[q]{Style.RESET_ALL} Quit")
 
             self.print_status_bar()
 
             print()
             choice = input("Enter choice: ").strip().lower()
+
+            # Handle global commands (q to quit, s to save)
+            global_result = self.handle_global_commands(choice)
+            if global_result == 'exit':
+                self.menu_stack.pop()
+                return
+            elif global_result == 'saved':
+                continue  # Redraw menu after save
 
             if choice == 'b':
                 break
