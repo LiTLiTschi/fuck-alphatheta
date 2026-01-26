@@ -54,3 +54,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "*" = ["../config/default_config.yaml"]
+"rekordbox_midi_helper.tui" = ["styles/*.tcss"]
