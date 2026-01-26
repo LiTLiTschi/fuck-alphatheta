@@ -1053,13 +1053,45 @@ class ConfigMenu:
         # Hide preview now that MIDI is assigned
         self.hide_shape_preview()
 
+        # Configure MIDI behavior (what happens when MIDI signal is received)
+        print(f"\n{Fore.CYAN}Configure shape behavior:{Style.RESET_ALL}")
+        print("What should happen when the MIDI note is triggered?")
+        print()
+        print("  1. Toggle (on/off each press)")
+        print("  2. Show on note_on, hide on note_off")
+        print("  3. Hide on note_on, show on note_off")
+        print("  4. Always visible (ignore MIDI)")
+        behavior_choice = input("Enter choice (1-4) [1]: ").strip() or "1"
+
+        if behavior_choice == '2':
+            behavior = {
+                'note_on': 'show',
+                'note_off': 'hide'
+            }
+        elif behavior_choice == '3':
+            behavior = {
+                'note_on': 'hide',
+                'note_off': 'show'
+            }
+        elif behavior_choice == '4':
+            behavior = {
+                'note_on': 'none',
+                'note_off': 'none'
+            }
+        else:  # Default to toggle
+            behavior = {
+                'note_on': 'toggle',
+                'note_off': 'none'
+            }
+
         shape_config = {
             'id': shape_id,
             'type': shape_type,
             'position': position,
             'size': size,
             'color': color,
-            'trigger_midi': trigger_midi
+            'trigger_midi': trigger_midi,
+            'behavior': behavior
         }
 
         self.print_success(f"Static shape '{shape_id}' configured!")
@@ -1157,17 +1189,50 @@ class ConfigMenu:
         # Hide preview now that MIDI is assigned
         self.hide_shape_preview()
 
-        # Animation parameters
+        # Configure shape behavior (how CC values affect the animation)
+        print(f"\n{Fore.CYAN}Configure animation behavior:{Style.RESET_ALL}")
+        print("Define how the MIDI CC value (0-127) controls the shape animation.")
+        print()
+
         if shape_type == 'pie_chart':
+            start_angle = int(self.get_input("Start angle (degrees, 0=top)", "0"))
+            print()
+            print("Fill direction:")
+            print("  1. Clockwise")
+            print("  2. Counterclockwise")
+            fill_choice = input("Enter choice (1-2) [1]: ").strip() or "1"
+            fill_direction = 'counterclockwise' if fill_choice == '2' else 'clockwise'
+
             animation = {
-                'start_angle': int(self.get_input("Start angle (degrees)", "0")),
+                'start_angle': start_angle,
                 'end_angle_range': [0, 360],
-                'fill_direction': self.get_input("Fill direction (clockwise/counterclockwise)", "clockwise")
+                'fill_direction': fill_direction,
+                'cc_mapping': 'linear'  # CC 0-127 maps to 0-360 degrees
             }
         else:  # progress_bar
+            print("Bar orientation:")
+            print("  1. Horizontal")
+            print("  2. Vertical")
+            direction_choice = input("Enter choice (1-2) [1]: ").strip() or "1"
+            direction = 'vertical' if direction_choice == '2' else 'horizontal'
+
+            print()
+            print("Fill direction:")
+            if direction == 'horizontal':
+                print("  1. Left to right")
+                print("  2. Right to left")
+                fill_choice = input("Enter choice (1-2) [1]: ").strip() or "1"
+                fill_direction = 'right_to_left' if fill_choice == '2' else 'left_to_right'
+            else:
+                print("  1. Bottom to top")
+                print("  2. Top to bottom")
+                fill_choice = input("Enter choice (1-2) [1]: ").strip() or "1"
+                fill_direction = 'top_to_bottom' if fill_choice == '2' else 'bottom_to_top'
+
             animation = {
-                'direction': self.get_input("Direction (horizontal/vertical)", "horizontal"),
-                'fill_direction': self.get_input("Fill direction (left_to_right/right_to_left/top_to_bottom/bottom_to_top)", "left_to_right")
+                'direction': direction,
+                'fill_direction': fill_direction,
+                'cc_mapping': 'linear'  # CC 0-127 maps to 0-100%
             }
 
         shape_config = {
