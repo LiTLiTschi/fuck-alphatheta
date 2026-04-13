@@ -28,11 +28,60 @@ echo [OK] Python %PY_VER%
 echo.
 
 :: -------------------------------------------------------
-:: 2. Python deps (pynput + pyautogui)
+:: 2. Resolve package installer: prefer uv, fallback to pip
 :: -------------------------------------------------------
 echo [2/5] Installing Python dependencies...
-python -m pip install pynput pyautogui --quiet --upgrade
-if errorlevel 1 ( echo [ERROR] pip failed. & pause & exit /b 1 )
+
+:: Check if uv is available
+uv --version >nul 2>&1
+if not errorlevel 1 (
+    echo [INFO] uv found, using uv pip.
+    set USE_UV=1
+    goto :INSTALL_DEPS
+)
+
+:: uv not found -- try to install it via pip first
+echo [INFO] uv not found, attempting to install via pip...
+python -m pip --version >nul 2>&1
+if not errorlevel 1 (
+    python -m pip install uv --quiet
+    uv --version >nul 2>&1
+    if not errorlevel 1 (
+        echo [OK] uv installed via pip.
+        set USE_UV=1
+        goto :INSTALL_DEPS
+    )
+)
+
+:: pip not available either -- install uv via official standalone installer
+echo [INFO] pip not available (venv without pip?). Installing uv via official installer...
+curl -LsSf https://astral.sh/uv/install.sh >nul 2>&1
+powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex" >nul 2>&1
+:: Refresh PATH for current session
+set "PATH=%USERPROFILE%\.local\bin;%USERPROFILE%\.cargo\bin;%PATH%"
+uv --version >nul 2>&1
+if not errorlevel 1 (
+    echo [OK] uv installed via official installer.
+    set USE_UV=1
+    goto :INSTALL_DEPS
+)
+
+:: Last resort: plain pip (might still work if module exists but --version fails)
+echo [INFO] Falling back to plain pip install...
+set USE_UV=0
+
+:INSTALL_DEPS
+if "!USE_UV!"=="1" (
+    uv pip install pynput pyautogui --system
+) else (
+    python -m pip install pynput pyautogui --quiet --upgrade
+)
+if errorlevel 1 (
+    echo [ERROR] Dependency installation failed.
+    echo         Try running:  uv pip install pynput pyautogui --system
+    echo         Or manually:  pip install pynput pyautogui
+    pause & exit /b 1
+)
 echo [OK] pynput + pyautogui ready.
 echo.
 
@@ -64,7 +113,7 @@ echo.
 :: -------------------------------------------------------
 echo [4/5] Launching calibration wizard...
 echo       Follow the on-screen instructions to calibrate
-echo       your Rekordbox layout.
+       your Rekordbox layout.
 echo.
 python "%SCRIPT_DIR%setup_cfx.py"
 if errorlevel 1 (
