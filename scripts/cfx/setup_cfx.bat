@@ -24,7 +24,9 @@ if errorlevel 1 (
     pause & exit /b 1
 )
 for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do set PY_VER=%%v
-echo [OK] Python %PY_VER%
+:: Capture full Python executable path for uv --python
+for /f "delims=" %%p in ('python -c "import sys; print(sys.executable)"') do set PY_EXE=%%p
+echo [OK] Python %PY_VER% at %PY_EXE%
 echo.
 
 :: -------------------------------------------------------
@@ -35,13 +37,13 @@ echo [2/5] Installing Python dependencies...
 :: Check if uv is available
 uv --version >nul 2>&1
 if not errorlevel 1 (
-    echo [INFO] uv found, using uv pip.
+    echo [INFO] uv found.
     set USE_UV=1
     goto :INSTALL_DEPS
 )
 
-:: uv not found -- try to install it via pip first
-echo [INFO] uv not found, attempting to install via pip...
+:: uv not found -- try to install via pip
+echo [INFO] uv not found, trying pip install uv...
 python -m pip --version >nul 2>&1
 if not errorlevel 1 (
     python -m pip install uv --quiet
@@ -53,33 +55,38 @@ if not errorlevel 1 (
     )
 )
 
-:: pip not available either -- install uv via official standalone installer
-echo [INFO] pip not available (venv without pip?). Installing uv via official installer...
-curl -LsSf https://astral.sh/uv/install.sh >nul 2>&1
+:: pip unavailable -- install uv via official PowerShell installer
+echo [INFO] pip unavailable. Installing uv via official installer...
 powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex" >nul 2>&1
-:: Refresh PATH for current session
 set "PATH=%USERPROFILE%\.local\bin;%USERPROFILE%\.cargo\bin;%PATH%"
 uv --version >nul 2>&1
 if not errorlevel 1 (
-    echo [OK] uv installed via official installer.
+    echo [OK] uv installed.
     set USE_UV=1
     goto :INSTALL_DEPS
 )
 
-:: Last resort: plain pip (might still work if module exists but --version fails)
-echo [INFO] Falling back to plain pip install...
+echo [INFO] uv unavailable, falling back to plain pip.
 set USE_UV=0
 
 :INSTALL_DEPS
 if "!USE_UV!"=="1" (
-    uv pip install pynput pyautogui --system
+    :: Try --python <exe> first -- works in venvs and avoids "no system Python" error
+    echo [INFO] Running: uv pip install --python "!PY_EXE!" ...
+    uv pip install pynput pyautogui --python "!PY_EXE!"
+    if errorlevel 1 (
+        :: Fallback: --system (works when a system Python is registered)
+        echo [INFO] Retrying with --system...
+        uv pip install pynput pyautogui --system
+    )
 ) else (
     python -m pip install pynput pyautogui --quiet --upgrade
 )
 if errorlevel 1 (
     echo [ERROR] Dependency installation failed.
-    echo         Try running:  uv pip install pynput pyautogui --system
-    echo         Or manually:  pip install pynput pyautogui
+    echo         Try manually in your terminal:
+    echo           uv pip install pynput pyautogui --python "%PY_EXE%"
+    echo         or:  pip install pynput pyautogui
     pause & exit /b 1
 )
 echo [OK] pynput + pyautogui ready.
@@ -113,7 +120,7 @@ echo.
 :: -------------------------------------------------------
 echo [4/5] Launching calibration wizard...
 echo       Follow the on-screen instructions to calibrate
-       your Rekordbox layout.
+echo       your Rekordbox layout.
 echo.
 python "%SCRIPT_DIR%setup_cfx.py"
 if errorlevel 1 (
@@ -135,13 +142,11 @@ if not exist "%AHK_SCRIPT%" (
     pause & exit /b 1
 )
 
-:: Try AHK v1 compiler location first, then v2
 set AHK2EXE="C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
 if not exist %AHK2EXE% set AHK2EXE="C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe"
 if not exist %AHK2EXE% (
     echo [WARN] Ahk2Exe compiler not found.
     echo        You can still run:  double-click RekordboxCFX.ahk
-    echo        (AutoHotkey must be installed on that machine)
     goto :DONE_NO_EXE
 )
 
@@ -154,17 +159,10 @@ if errorlevel 1 (
 echo.
 echo  =====================================================
 echo   SUCCESS!
-echo.
 echo   EXE ready:  %AHK_EXE_OUT%
-echo.
 echo   --> Double-click RekordboxCFX.exe to activate.
-echo       No AHK installation needed on target machine.
-echo.
-echo   Hotkeys:
-echo     Ch1  Ctrl+Alt+1..9
-echo     Ch2  Ctrl+Shift+1..9
-echo     Ch3  Alt+Shift+1..9
-echo     Ch4  Ctrl+Alt+Shift+1..9
+echo   Hotkeys:  Ch1 Ctrl+Alt+1..9  Ch2 Ctrl+Shift+1..9
+echo             Ch3 Alt+Shift+1..9  Ch4 Ctrl+Alt+Shift+1..9
 echo  =====================================================
 echo.
 goto :DONE
@@ -172,8 +170,7 @@ goto :DONE
 :DONE_NO_EXE
 echo.
 echo  =====================================================
-echo   DONE (script mode)
-echo   Run RekordboxCFX.ahk with AutoHotkey to activate.
+echo   DONE (script mode) -- run RekordboxCFX.ahk
 echo  =====================================================
 echo.
 
