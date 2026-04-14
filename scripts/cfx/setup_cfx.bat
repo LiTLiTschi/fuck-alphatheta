@@ -130,8 +130,6 @@ if errorlevel 1 (
 )
 echo.
 
-goto :EOF
-
 :BAT_HELP
 echo Usage: setup_cfx.bat [--help] [--json path] [--generate-from-json]
 echo.
