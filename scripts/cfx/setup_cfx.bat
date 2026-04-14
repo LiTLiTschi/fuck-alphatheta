@@ -86,17 +86,26 @@ if "%AHK_OK%"=="1" (
     goto :AHK_READY
 )
 
-echo [INFO] AutoHotkey not found -- downloading installer...
-set AHK_INSTALLER=%TEMP%\ahk_setup.exe
-curl -L -o "%AHK_INSTALLER%" "https://www.autohotkey.com/download/ahk-install.exe" --silent
-if errorlevel 1 (
-    echo [ERROR] Download failed. Install manually: https://www.autohotkey.com
-    pause & exit /b 1
+echo [INFO] AutoHotkey not found -- checking for local installer in project/ahk...
+set "AHK_LOCAL_INSTALLER=%SCRIPT_DIR%..\..\ahk\AutoHotkey_2.0.23_setup.exe"
+if exist "%AHK_LOCAL_INSTALLER%" (
+    echo [INFO] Found local installer at %AHK_LOCAL_INSTALLER% -- running silently
+    "%AHK_LOCAL_INSTALLER%" /S
+    timeout /t 5 /nobreak >nul
+    echo [OK] AutoHotkey installed from local installer.
+) else (
+    echo [INFO] Local installer not found; downloading installer...
+    set AHK_INSTALLER=%TEMP%\ahk_setup.exe
+    curl -L -o "%AHK_INSTALLER%" "https://www.autohotkey.com/download/ahk-install.exe" --silent
+    if errorlevel 1 (
+        echo [ERROR] Download failed. Install manually: https://www.autohotkey.com
+        pause & exit /b 1
+    )
+    echo [INFO] Running AutoHotkey installer (silent)...
+    "%AHK_INSTALLER%" /S
+    timeout /t 5 /nobreak >nul
+    echo [OK] AutoHotkey installed.
 )
-echo [INFO] Running AutoHotkey installer (silent)...
-"%AHK_INSTALLER%" /S
-timeout /t 5 /nobreak >nul
-echo [OK] AutoHotkey installed.
 
 :AHK_READY
 echo.
@@ -196,7 +205,16 @@ echo [5/5] Starting Ahk2Exe compilation...
 echo [INFO] Command: "%AHK2EXE%" /in "%AHK_SCRIPT%" /out "%AHK_EXE_OUT%" /compress 2
 echo [INFO] Compilation may take several seconds; showing start/end times when done.
 set "COMP_START=%TIME%"
-"%AHK2EXE%" /in "%AHK_SCRIPT%" /out "%AHK_EXE_OUT%" /compress 2
+set "ICON_PATH=%SCRIPT_DIR%..\..\ahk\emoji_smiley_sticker_emo_fun_funny_icon_132665.ico"
+if exist "%ICON_PATH%" (
+    echo [INFO] Using icon: %ICON_PATH%
+    set "ICON_ARG=/icon \"%ICON_PATH%\""
+) else (
+    set "ICON_ARG="
+)
+
+echo [INFO] Running Ahk2Exe...
+"%AHK2EXE%" /in "%AHK_SCRIPT%" /out "%AHK_EXE_OUT%" %ICON_ARG% /compress 2 /silent verbose
 set "COMP_END=%TIME%"
 if errorlevel 1 (
     echo [WARN] Compile failed -- run RekordboxCFX.ahk manually.
