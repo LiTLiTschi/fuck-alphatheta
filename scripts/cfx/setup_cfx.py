@@ -17,18 +17,22 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Helper: wait for a single left-click release, return (x, y)
 # ---------------------------------------------------------------------------
-def get_click(prompt):
+def get_click(prompt, ignore_first=False):
     print(f"\n[SETUP] {prompt}")
     print("       --> Click now...")
     pos = []
     def on_click(x, y, button, pressed):
         if button == mouse.Button.left and not pressed:
             pos.append((x, y))
+            # If ignoring the first click, wait for a second release before stopping
+            if ignore_first and len(pos) == 1:
+                return None  # continue listening
             return False
     with mouse.Listener(on_click=on_click) as listener:
         listener.join()
-    print(f"       --> Captured: {pos[0]}")
-    return pos[0]
+    captured = pos[-1]
+    print(f"       --> Captured: {captured}")
+    return captured
 
 # ---------------------------------------------------------------------------
 # Calibration for one channel
@@ -39,7 +43,7 @@ def calibrate_channel(ch_num):
     print(f"{'='*50}")
     open_p  = get_click(f"Ch{ch_num}: Click the CFX dropdown ARROW (closed menu)")
     opt1_p  = get_click(f"Ch{ch_num}: OPEN the menu manually, then click OPTION 1 (the menu will close after selection)")
-    opt9_p  = get_click(f"Ch{ch_num}: OPEN the menu manually again, then click OPTION 9 (last option - ensure the menu is open before clicking)")
+    opt9_p  = get_click(f"Ch{ch_num}: OPEN the menu manually again, then click OPTION 9 (last option - ensure the menu is open before clicking)", ignore_first=True)
     step_y  = (opt9_p[1] - opt1_p[1]) / 8.0
     return {
         "open":  list(open_p),
