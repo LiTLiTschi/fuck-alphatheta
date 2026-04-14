@@ -171,11 +171,19 @@ goto :DONE_NO_EXE
 
 :AHK2EXE_FOUND
 
+echo [5/5] Starting Ahk2Exe compilation...
+echo [INFO] Command: "%AHK2EXE%" /in "%AHK_SCRIPT%" /out "%AHK_EXE_OUT%" /compress 2
+echo [INFO] Compilation may take several seconds; showing start/end times when done.
+set "COMP_START=%TIME%"
 "%AHK2EXE%" /in "%AHK_SCRIPT%" /out "%AHK_EXE_OUT%" /compress 2
+set "COMP_END=%TIME%"
 if errorlevel 1 (
     echo [WARN] Compile failed -- run RekordboxCFX.ahk manually.
+    echo [INFO] Compilation started at %COMP_START% and ended at %COMP_END%
     goto :DONE_NO_EXE
 )
+
+echo [INFO] Compilation finished. Started: %COMP_START% Ended: %COMP_END%
 
 echo.
 echo  =====================================================
