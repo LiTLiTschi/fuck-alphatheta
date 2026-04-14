@@ -159,6 +159,9 @@ if not exist "%AHK_SCRIPT%" (
 set AHK2EXE=
 
 :: Check common locations for Ahk2Exe.exe (quoted to handle spaces)
+if exist "%SCRIPT_DIR%..\..\ahk\Ahk2Exe.exe" (
+    set "AHK2EXE=%SCRIPT_DIR%..\..\ahk\Ahk2Exe.exe"
+)
 if exist "%SCRIPT_DIR%..\..\Ahk2Exe.exe" (
     set "AHK2EXE=%SCRIPT_DIR%..\..\Ahk2Exe.exe"
 ) 
@@ -177,6 +180,7 @@ if exist "C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe" (
 
 if "%AHK2EXE%"=="" (
     echo [WARN] Ahk2Exe not found in candidate locations:
+    echo    %SCRIPT_DIR%..\..\ahk\Ahk2Exe.exe
     echo    %SCRIPT_DIR%..\..\Ahk2Exe.exe
     echo    %SCRIPT_DIR%..\Ahk2Exe.exe
     echo    %SCRIPT_DIR%Ahk2Exe.exe
