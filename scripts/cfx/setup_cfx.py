@@ -5,7 +5,8 @@ import os, sys, subprocess, json
 # ---------------------------------------------------------------------------
 def install_deps():
     print("[SETUP] Installing Python dependencies...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pynput", "pyautogui", "--quiet"])
+    # Install UI and MIDI libraries
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pynput", "pyautogui", "mido", "python-rtmidi", "--quiet"])
     print("[OK] Dependencies installed.")
 
 try:
@@ -13,6 +14,23 @@ try:
 except ImportError:
     install_deps()
     from pynput import mouse
+
+# Ensure MIDI library available
+try:
+    import mido
+except Exception:
+    # install_deps already installs mido; on failure, keep going and surface later
+    mido = None
+
+
+def list_midi_devices():
+    """Return list of MIDI input device names (may be empty)."""
+    if not mido:
+        return []
+    try:
+        return mido.get_input_names()
+    except Exception:
+        return []
 
 # ---------------------------------------------------------------------------
 # Helper: wait for a single left-click release, return (x, y)
@@ -136,10 +154,32 @@ def main():
     parser.add_argument("--generate-from-json", action="store_true", help="Generate AHK from existing calibration JSON (uses cfx_calibration.json if no path provided)")
     parser.add_argument("--json-path", "-j", help="Path to calibration JSON to generate AHK from")
     parser.add_argument("--click-delay", "-d", type=int, default=20, help="Click delay in milliseconds to embed in generated AHK (default: 20)")
+    parser.add_argument("--input-method", choices=["midi","keyboard"], help="Input method for triggering CFX selections")
+    parser.add_argument("--midi-device", help="MIDI device name or numeric index to use (interactive will list devices)")
     parser.add_argument("--no-prompt", action="store_true", help="Run without intermediate prompts (useful for scripts)")
     args = parser.parse_args()
 
     # Non-interactive flows
+    def _pick_midi_device(midi_arg=None):
+        names = list_midi_devices()
+        if not names:
+            return None
+        if midi_arg:
+            # numeric index?
+            try:
+                idx = int(midi_arg)
+                if 0 <= idx < len(names):
+                    return names[idx]
+            except Exception:
+                pass
+            # match by substring
+            for n in names:
+                if midi_arg.lower() in n.lower():
+                    return n
+            return None
+        # no arg: pick first
+        return names[0]
+
     if args.generate_from_json or args.json_path:
         cal_path = args.json_path if args.json_path else os.path.join(os.path.dirname(__file__), "cfx_calibration.json")
         if not os.path.exists(cal_path):
@@ -148,6 +188,15 @@ def main():
         with open(cal_path, "r", encoding="utf-8") as f:
             channels = json.load(f)
             channels = {int(k): v for k, v in channels.items()}
+        # Determine input method
+        input_cfg = {"method": "keyboard", "device": None}
+        if args.input_method == "midi" or args.midi_device:
+            dev = _pick_midi_device(args.midi_device)
+            if dev:
+                input_cfg = {"method": "midi", "device": dev}
+            else:
+                print("[WARN] MIDI device not found; falling back to keyboard input")
+        channels.setdefault("_meta", {})["input"] = input_cfg
         ahk_path = os.path.join(os.path.dirname(__file__), "RekordboxCFX.ahk")
         ahk_code = generate_ahk(channels, click_delay=args.click_delay)
         with open(ahk_path, "w", encoding="utf-8") as f:
@@ -160,7 +209,32 @@ def main():
         channels = {}
         for ch in range(1, n_channels + 1):
             channels[ch] = calibrate_channel(ch)
+        # Ask for input method
+        input_cfg = {"method": "keyboard", "device": None}
+        if not args.no_prompt:
+            im = input('Input method for triggers ([m]idi/[k]eyboard, default keyboard): ').strip().lower()
+            if im.startswith('m'):
+                names = list_midi_devices()
+                if not names:
+                    print('[WARN] No MIDI devices found; using keyboard input')
+                else:
+                    print('\nAvailable MIDI devices:')
+                    for i, n in enumerate(names):
+                        print(f'  {i}) {n}')
+                    sel = input('Select device index (default 0): ').strip()
+                    try:
+                        sel_i = int(sel) if sel else 0
+                        dev = names[sel_i]
+                        input_cfg = {"method": "midi", "device": dev}
+                    except Exception:
+                        print('[WARN] Invalid selection; using keyboard input')
+        else:
+            if args.input_method == 'midi':
+                dev = _pick_midi_device(args.midi_device)
+                if dev:
+                    input_cfg = {"method": "midi", "device": dev}
         cal_path = os.path.join(os.path.dirname(__file__), "cfx_calibration.json")
+        channels.setdefault("_meta", {})["input"] = input_cfg
         with open(cal_path, "w", encoding="utf-8") as f:
             json.dump(channels, f, indent=2)
         print(f"\n[OK] Calibration saved to {cal_path}")
@@ -189,6 +263,31 @@ def main():
             channels = {}
             for ch in range(1, n + 1):
                 channels[ch] = calibrate_channel(ch)
+            # Ask for input method (interactive)
+            input_cfg = {"method": "keyboard", "device": None}
+            if not args.no_prompt:
+                im = input('Input method for triggers ([m]idi/[k]eyboard, default keyboard): ').strip().lower()
+                if im.startswith('m'):
+                    names = list_midi_devices()
+                    if not names:
+                        print('[WARN] No MIDI devices found; using keyboard input')
+                    else:
+                        print('\nAvailable MIDI devices:')
+                        for i, n in enumerate(names):
+                            print(f'  {i}) {n}')
+                        sel = input('Select device index (default 0): ').strip()
+                        try:
+                            sel_i = int(sel) if sel else 0
+                            dev = names[sel_i]
+                            input_cfg = {"method": "midi", "device": dev}
+                        except Exception:
+                            print('[WARN] Invalid selection; using keyboard input')
+            else:
+                if args.input_method == 'midi':
+                    dev = _pick_midi_device(args.midi_device)
+                    if dev:
+                        input_cfg = {"method": "midi", "device": dev}
+            channels.setdefault("_meta", {})["input"] = input_cfg
             cal_path = os.path.join(os.path.dirname(__file__), "cfx_calibration.json")
             with open(cal_path, "w", encoding="utf-8") as f:
                 json.dump(channels, f, indent=2)
@@ -216,6 +315,31 @@ def main():
             with open(cal_path, "r", encoding="utf-8") as f:
                 channels = json.load(f)
                 channels = {int(k): v for k, v in channels.items()}
+            # Ask interactive user for input method
+            input_cfg = {"method": "keyboard", "device": None}
+            if not args.no_prompt:
+                im = input('Input method for triggers ([m]idi/[k]eyboard, default keyboard): ').strip().lower()
+                if im.startswith('m'):
+                    names = list_midi_devices()
+                    if not names:
+                        print('[WARN] No MIDI devices found; using keyboard input')
+                    else:
+                        print('\nAvailable MIDI devices:')
+                        for i, n in enumerate(names):
+                            print(f'  {i}) {n}')
+                        sel = input('Select device index (default 0): ').strip()
+                        try:
+                            sel_i = int(sel) if sel else 0
+                            dev = names[sel_i]
+                            input_cfg = {"method": "midi", "device": dev}
+                        except Exception:
+                            print('[WARN] Invalid selection; using keyboard input')
+            else:
+                if args.input_method == 'midi':
+                    dev = _pick_midi_device(args.midi_device)
+                    if dev:
+                        input_cfg = {"method": "midi", "device": dev}
+            channels.setdefault("_meta", {})["input"] = input_cfg
             # Ask interactive user for click delay unless no-prompt is set
             if not args.no_prompt:
                 try:
