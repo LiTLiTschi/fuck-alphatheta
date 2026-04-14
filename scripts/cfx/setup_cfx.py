@@ -38,8 +38,8 @@ def calibrate_channel(ch_num):
     print(f"  CHANNEL {ch_num} CALIBRATION")
     print(f"{'='*50}")
     open_p  = get_click(f"Ch{ch_num}: Click the CFX dropdown ARROW (closed menu)")
-    opt1_p  = get_click(f"Ch{ch_num}: OPEN the menu manually, then click OPTION 1")
-    opt9_p  = get_click(f"Ch{ch_num}: Click OPTION 9 (last option, menu still open)")
+    opt1_p  = get_click(f"Ch{ch_num}: OPEN the menu manually, then click OPTION 1 (the menu will close after selection)")
+    opt9_p  = get_click(f"Ch{ch_num}: OPEN the menu manually again, then click OPTION 9 (last option - ensure the menu is open before clicking)")
     step_y  = (opt9_p[1] - opt1_p[1]) / 8.0
     return {
         "open":  list(open_p),
