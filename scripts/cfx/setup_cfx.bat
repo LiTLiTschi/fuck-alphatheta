@@ -157,22 +157,35 @@ if not exist "%AHK_SCRIPT%" (
 )
 
 set AHK2EXE=
-:: Candidate locations to check for Ahk2Exe.exe (semicolon-separated)
-set "CANDIDATES=%SCRIPT_DIR%..\..\Ahk2Exe.exe;%SCRIPT_DIR%..\Ahk2Exe.exe;%SCRIPT_DIR%Ahk2Exe.exe;C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe;C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe"
-for /f "usebackq delims=;" %%P in ("%CANDIDATES%") do (
-    set "CAND=%%~P"
-    if exist "!CAND!" (
-        set "AHK2EXE=!CAND!"
-        echo [INFO] Found Ahk2Exe at: !CAND!
-        goto :AHK2EXE_FOUND
-    )
+
+:: Check common locations for Ahk2Exe.exe (quoted to handle spaces)
+if exist "%SCRIPT_DIR%..\..\Ahk2Exe.exe" (
+    set "AHK2EXE=%SCRIPT_DIR%..\..\Ahk2Exe.exe"
+) 
+if exist "%SCRIPT_DIR%..\Ahk2Exe.exe" (
+    set "AHK2EXE=%SCRIPT_DIR%..\Ahk2Exe.exe"
+)
+if exist "%SCRIPT_DIR%Ahk2Exe.exe" (
+    set "AHK2EXE=%SCRIPT_DIR%Ahk2Exe.exe"
+)
+if exist "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" (
+    set "AHK2EXE=C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
+)
+if exist "C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe" (
+    set "AHK2EXE=C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe"
 )
 
+if "%AHK2EXE%"=="" (
+    echo [WARN] Ahk2Exe not found in candidate locations:
+    echo    %SCRIPT_DIR%..\..\Ahk2Exe.exe
+    echo    %SCRIPT_DIR%..\Ahk2Exe.exe
+    echo    %SCRIPT_DIR%Ahk2Exe.exe
+    echo    C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe
+    echo    C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe
+    goto :DONE_NO_EXE
+)
 
-echo [WARN] Ahk2Exe not found in candidate locations:
-for /f "usebackq delims=;" %%P in ("%CANDIDATES%") do echo    %%~P
-goto :DONE_NO_EXE
-
+echo [INFO] Found Ahk2Exe at: %AHK2EXE%
 :AHK2EXE_FOUND
 
 echo [5/5] Starting Ahk2Exe compilation...
