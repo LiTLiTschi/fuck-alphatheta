@@ -130,6 +130,8 @@ if errorlevel 1 (
 )
 echo.
 
+goto :COMPILE
+
 :BAT_HELP
 echo Usage: setup_cfx.bat [--help] [--json path] [--generate-from-json]
 echo.
@@ -142,6 +144,8 @@ exit /b 0
 :: -------------------------------------------------------
 :: 5. Compile AHK -> EXE
 :: -------------------------------------------------------
+:COMPILE
+
 echo [5/5] Compiling AHK script to standalone EXE...
 
 set AHK_SCRIPT=%SCRIPT_DIR%RekordboxCFX.ahk
