@@ -134,6 +134,23 @@ def main():
     print("╚══════════════════════════════════════════════╝")
     print()
 
+    # If called with --generate-from-json, load existing calibration and write AHK
+    if len(sys.argv) > 1 and sys.argv[1] == "--generate-from-json":
+        cal_path = os.path.join(os.path.dirname(__file__), "cfx_calibration.json")
+        if not os.path.exists(cal_path):
+            print(f"[ERROR] Calibration JSON not found at {cal_path}")
+            sys.exit(1)
+        with open(cal_path, "r", encoding="utf-8") as f:
+            channels = json.load(f)
+            # keys might be strings; convert to int keys
+            channels = {int(k): v for k, v in channels.items()}
+        ahk_path = os.path.join(os.path.dirname(__file__), "RekordboxCFX.ahk")
+        ahk_code = generate_ahk(channels)
+        with open(ahk_path, "w", encoding="utf-8") as f:
+            f.write(ahk_code)
+        print(f"[OK] AHK script written to {ahk_path}")
+        sys.exit(0)
+
     try:
         n_channels = int(input("How many channels to calibrate? (1–4): ").strip())
         assert 1 <= n_channels <= 4
