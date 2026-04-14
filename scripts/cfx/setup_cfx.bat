@@ -116,22 +116,51 @@ echo.
 echo [4/5] Launching calibration wizard...
 echo       Follow the on-screen instructions.
 echo.
-:: BAT wrapper help
-if /i "%~1"=="--help" goto :BAT_HELP
-if /i "%~1"=="-h" goto :BAT_HELP
 
-:: If caller provided --json <path>, pass it to python as --json-path
-if /i "%~1"=="--json" (
-    if "%~2"=="" (
-        echo [ERROR] --json requires a path argument.
-        pause & exit /b 1
+:: If no args provided, offer a small interactive menu in the batch wrapper
+set "PY_ARGS="
+if "%~1"=="" (
+    echo No arguments provided. Choose an action:
+    echo  1) Calibrate channels interactively
+    echo  2) Generate AHK from cfx_calibration.json
+    echo  3) Generate AHK from a specific JSON path
+    echo  4) Quit
+    set /p "MENUCHOICE=Select [1-4]: "
+    if "%MENUCHOICE%"=="1" (
+        set "PY_ARGS="
+    ) else if "%MENUCHOICE%"=="2" (
+        set "PY_ARGS=--generate-from-json"
+    ) else if "%MENUCHOICE%"=="3" (
+        set /p "JSONPATH=Enter path to calibration JSON: "
+        if "%JSONPATH%"=="" (
+            echo [ERROR] Empty path -- aborting.
+            pause & exit /b 1
+        )
+        set "PY_ARGS=--json-path \"%JSONPATH%\""
+    ) else (
+        echo Exiting.
+        exit /b 0
     )
-    python "%SCRIPT_DIR%setup_cfx.py" --json-path "%~2"
-) else if /i "%~1"=="--generate-from-json" (
-    python "%SCRIPT_DIR%setup_cfx.py" --generate-from-json
 ) else (
-    python "%SCRIPT_DIR%setup_cfx.py"
+    :: Arguments were provided to the batch wrapper; map them to python
+    if /i "%~1"=="--help" goto :BAT_HELP
+    if /i "%~1"=="-h" goto :BAT_HELP
+    if /i "%~1"=="--json" (
+        if "%~2"=="" (
+            echo [ERROR] --json requires a path argument.
+            pause & exit /b 1
+        )
+        set "PY_ARGS=--json-path \"%~2\""
+    ) else if /i "%~1"=="--generate-from-json" (
+        set "PY_ARGS=--generate-from-json"
+    ) else (
+        :: Unknown arg -> pass through
+        set "PY_ARGS=%*"
+    )
 )
+
+echo [INFO] Running: python "%SCRIPT_DIR%setup_cfx.py" %PY_ARGS%
+python "%SCRIPT_DIR%setup_cfx.py" %PY_ARGS%
 
 if errorlevel 1 (
     echo [ERROR] Calibration failed or was cancelled.
