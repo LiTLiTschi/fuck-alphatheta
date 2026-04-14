@@ -117,37 +117,45 @@ echo [4/5] Launching calibration wizard...
 echo       Follow the on-screen instructions.
 echo.
 
-:: If no args provided, offer a small interactive menu in the batch wrapper
+:: Interactive menu simplified to avoid parser issues
 set "PY_ARGS="
-if "%~1"=="" (
-    echo No arguments provided. Choose an action:
-    echo  1) Calibrate channels interactively
-    echo  2) Generate AHK from cfx_calibration.json
-    echo  3) Generate AHK from a specific JSON path
-    echo  4) Quit
-    set /p "MENUCHOICE=Select [1-4]: "
-    if "%MENUCHOICE%"=="1" (
-        set "PY_ARGS="
-    ) else if "%MENUCHOICE%"=="2" (
-        set "PY_ARGS=--generate-from-json"
-    ) else if "%MENUCHOICE%"=="3" (
-        set /p "JSONPATH=Enter path to calibration JSON: "
-        if "%JSONPATH%"=="" (
-            echo [ERROR] Empty path -- aborting.
-            pause & exit /b 1
-        )
-        set "PY_ARGS=--json-path \"%JSONPATH%\""
-    ) else (
-        echo Exiting.
-        exit /b 0
+if "%~1"=="" goto :INTERACTIVE_MENU
+
+:: Arguments were provided to the batch wrapper; pass them through to python
+if /i "%~1"=="--help" goto :BAT_HELP
+if /i "%~1"=="-h" goto :BAT_HELP
+set "PY_ARGS=%*"
+goto :RUN_PY
+
+:INTERACTIVE_MENU
+echo No arguments provided. Choose an action:
+echo  1) Calibrate channels interactively
+echo  2) Generate AHK from cfx_calibration.json
+echo  3) Generate AHK from a specific JSON path
+echo  4) Quit
+set /p "MENUCHOICE=Select [1-4]: "
+if "%MENUCHOICE%"=="1" (
+    set "PY_ARGS="
+    goto :RUN_PY
+)
+if "%MENUCHOICE%"=="2" (
+    set "PY_ARGS=--generate-from-json"
+    goto :RUN_PY
+)
+if "%MENUCHOICE%"=="3" (
+    set /p "JSONPATH=Enter path to calibration JSON: "
+    if "%JSONPATH%"=="" (
+        echo [ERROR] Empty path -- aborting.
+        pause & exit /b 1
     )
-) else (
-    :: Arguments were provided to the batch wrapper; pass them through to python
-    if /i "%~1"=="--help" goto :BAT_HELP
-    if /i "%~1"=="-h" goto :BAT_HELP
-    set "PY_ARGS=%*"
+    set "PY_ARGS=--json-path \"%JSONPATH%\""
+    goto :RUN_PY
 )
 
+echo Exiting.
+exit /b 0
+
+:RUN_PY
 echo [INFO] Running: python "%SCRIPT_DIR%setup_cfx.py" %PY_ARGS%
 python "%SCRIPT_DIR%setup_cfx.py" %PY_ARGS%
 
