@@ -157,16 +157,18 @@ if not exist "%AHK_SCRIPT%" (
 set AHK2EXE=
 :: Candidate locations to check for Ahk2Exe.exe (semicolon-separated)
 set "CANDIDATES=%SCRIPT_DIR%..\..\Ahk2Exe.exe;%SCRIPT_DIR%..\Ahk2Exe.exe;%SCRIPT_DIR%Ahk2Exe.exe;C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe;C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe"
-for %%P in (%CANDIDATES:;= %) do (
-    if exist "%%~P" (
-        set "AHK2EXE=%%~P"
-        echo [INFO] Found Ahk2Exe at: %%~P
+for /f "usebackq delims=;" %%P in ("%CANDIDATES%") do (
+    set "CAND=%%~P"
+    if exist "!CAND!" (
+        set "AHK2EXE=!CAND!"
+        echo [INFO] Found Ahk2Exe at: !CAND!
         goto :AHK2EXE_FOUND
     )
 )
 
+
 echo [WARN] Ahk2Exe not found in candidate locations:
-for %%P in (%CANDIDATES:;= %) do echo    %%~P
+for /f "usebackq delims=;" %%P in ("%CANDIDATES%") do echo    %%~P
 goto :DONE_NO_EXE
 
 :AHK2EXE_FOUND
