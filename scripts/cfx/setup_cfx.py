@@ -131,10 +131,11 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(prog="setup_cfx.py", description="Calibration and AHK generator (minimal interactive CLI)")
     parser.add_argument("--channels", "-c", type=int, choices=range(1,5), help="Number of channels to calibrate (1-4)")
-    parser.add_argument("--generate-from-json", action="store_true", help="Generate AHK from existing calibration JSON")
+    parser.add_argument("--generate-from-json", action="store_true", help="Generate AHK from existing calibration JSON (uses cfx_calibration.json if no path provided)")
+    parser.add_argument("--json-path", "-j", help="Path to calibration JSON to generate AHK from")
     parser.add_argument("--no-prompt", action="store_true", help="Run without intermediate prompts (useful for scripts)")
     args = parser.parse_args()
-    
+
     print()
     print("╔══════════════════════════════════════════════╗")
     print("║   Rekordbox CFX Selector  –  Setup Wizard   ║")
