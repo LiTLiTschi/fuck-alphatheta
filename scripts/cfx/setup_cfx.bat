@@ -107,12 +107,39 @@ echo.
 echo [4/5] Launching calibration wizard...
 echo       Follow the on-screen instructions.
 echo.
-python "%SCRIPT_DIR%setup_cfx.py"
+:: BAT wrapper help
+if /i "%~1"=="--help" goto :BAT_HELP
+if /i "%~1"=="-h" goto :BAT_HELP
+
+:: If caller provided --json <path>, pass it to python as --json-path
+if /i "%~1"=="--json" (
+    if "%~2"=="" (
+        echo [ERROR] --json requires a path argument.
+        pause & exit /b 1
+    )
+    python "%SCRIPT_DIR%setup_cfx.py" --json-path "%~2"
+) else if /i "%~1"=="--generate-from-json" (
+    python "%SCRIPT_DIR%setup_cfx.py" --generate-from-json
+) else (
+    python "%SCRIPT_DIR%setup_cfx.py"
+)
+
 if errorlevel 1 (
     echo [ERROR] Calibration failed or was cancelled.
     pause & exit /b 1
 )
 echo.
+
+goto :EOF
+
+:BAT_HELP
+echo Usage: setup_cfx.bat [--help] [--json path] [--generate-from-json]
+echo.
+echo  --help                 Show this help
+echo  --json path            Generate AHK from specified calibration JSON (for python --json-path)
+echo  --generate-from-json   Use cfx_calibration.json in script dir
+pause >nul
+exit /b 0
 
 :: -------------------------------------------------------
 :: 5. Compile AHK -> EXE
