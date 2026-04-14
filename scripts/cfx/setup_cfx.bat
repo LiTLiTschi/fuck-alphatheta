@@ -142,21 +142,10 @@ if "%~1"=="" (
         exit /b 0
     )
 ) else (
-    :: Arguments were provided to the batch wrapper; map them to python
+    :: Arguments were provided to the batch wrapper; pass them through to python
     if /i "%~1"=="--help" goto :BAT_HELP
     if /i "%~1"=="-h" goto :BAT_HELP
-    if /i "%~1"=="--json" (
-        if "%~2"=="" (
-            echo [ERROR] --json requires a path argument.
-            pause & exit /b 1
-        )
-        set "PY_ARGS=--json-path \"%~2\""
-    ) else if /i "%~1"=="--generate-from-json" (
-        set "PY_ARGS=--generate-from-json"
-    ) else (
-        :: Unknown arg -> pass through
-        set "PY_ARGS=%*"
-    )
+    set "PY_ARGS=%*"
 )
 
 echo [INFO] Running: python "%SCRIPT_DIR%setup_cfx.py" %PY_ARGS%

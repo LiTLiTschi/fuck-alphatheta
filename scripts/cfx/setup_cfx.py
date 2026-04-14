@@ -56,8 +56,8 @@ def calibrate_channel(ch_num):
 # AHK script generator
 # ---------------------------------------------------------------------------
 AHK_HEADER = """#Requires AutoHotkey v2.0
-#NoEnv
-SendMode "Input"
+; Note: #NoEnv is removed in AHK v2 — avoid directives from v1
+SendMode("Input")
 CoordMode("Mouse", "Screen")
 
 ; ============================================================
@@ -66,7 +66,7 @@ CoordMode("Mouse", "Screen")
 ; ============================================================
 
 ; CLICK_DELAY_MS controls the pause between clicks (adjust as needed)
-CLICK_DELAY_MS := 20
+CLICK_DELAY_MS := {click_delay}
 
 ; Modifier scheme:
 ;   Channel 1: Ctrl+Alt+1..9
@@ -83,8 +83,9 @@ AHK_FUNC = """
 ;  Core click helper (AHK v2)
 ; ============================================================
 ClickCFX(ox, oy, ty) {
-    sx := MouseGetPos().x
-    sy := MouseGetPos().y
+    sx := 0
+    sy := 0
+    MouseGetPos(&sx, &sy)
     Click(ox, oy)
     Sleep CLICK_DELAY_MS
     Click(ox, ty)
@@ -107,8 +108,9 @@ MODIFIERS_PY = {
     4: "^!+",
 }
 
-def generate_ahk(channels: dict) -> str:
-    lines = [AHK_HEADER]
+def generate_ahk(channels: dict, click_delay: int = 20) -> str:
+    header = AHK_HEADER.format(click_delay=int(click_delay))
+    lines = [header]
     for ch_num, cal in channels.items():
         ox   = cal["open"][0]
         oy   = cal["open"][1]
@@ -133,8 +135,108 @@ def main():
     parser.add_argument("--channels", "-c", type=int, choices=range(1,5), help="Number of channels to calibrate (1-4)")
     parser.add_argument("--generate-from-json", action="store_true", help="Generate AHK from existing calibration JSON (uses cfx_calibration.json if no path provided)")
     parser.add_argument("--json-path", "-j", help="Path to calibration JSON to generate AHK from")
+    parser.add_argument("--click-delay", "-d", type=int, default=20, help="Click delay in milliseconds to embed in generated AHK (default: 20)")
     parser.add_argument("--no-prompt", action="store_true", help="Run without intermediate prompts (useful for scripts)")
     args = parser.parse_args()
+
+    # Non-interactive flows
+    if args.generate_from_json or args.json_path:
+        cal_path = args.json_path if args.json_path else os.path.join(os.path.dirname(__file__), "cfx_calibration.json")
+        if not os.path.exists(cal_path):
+            print(f"[ERROR] Calibration JSON not found at {cal_path}")
+            sys.exit(1)
+        with open(cal_path, "r", encoding="utf-8") as f:
+            channels = json.load(f)
+            channels = {int(k): v for k, v in channels.items()}
+        ahk_path = os.path.join(os.path.dirname(__file__), "RekordboxCFX.ahk")
+        ahk_code = generate_ahk(channels, click_delay=args.click_delay)
+        with open(ahk_path, "w", encoding="utf-8") as f:
+            f.write(ahk_code)
+        print(f"[OK] AHK script written to {ahk_path}")
+        return
+
+    if args.channels:
+        n_channels = args.channels
+        channels = {}
+        for ch in range(1, n_channels + 1):
+            channels[ch] = calibrate_channel(ch)
+        cal_path = os.path.join(os.path.dirname(__file__), "cfx_calibration.json")
+        with open(cal_path, "w", encoding="utf-8") as f:
+            json.dump(channels, f, indent=2)
+        print(f"\n[OK] Calibration saved to {cal_path}")
+        ahk_path = os.path.join(os.path.dirname(__file__), "RekordboxCFX.ahk")
+        ahk_code = generate_ahk(channels, click_delay=args.click_delay)
+        with open(ahk_path, "w", encoding="utf-8") as f:
+            f.write(ahk_code)
+        print(f"[OK] AHK script written to {ahk_path}")
+        return
+
+    # Interactive menu
+    while True:
+        print('\n--- Rekordbox CFX Setup (interactive) ---')
+        print('1) Calibrate channels')
+        print('2) Generate AHK from existing calibration JSON')
+        print('3) Show help')
+        print('4) Quit')
+        choice = input('Select an option [1-4]: ').strip()
+        if choice == '1':
+            try:
+                n = int(input('How many channels to calibrate? (1-4): ').strip())
+                assert 1 <= n <= 4
+            except (ValueError, AssertionError):
+                print('[ERROR] Enter a number between 1 and 4.')
+                continue
+            channels = {}
+            for ch in range(1, n + 1):
+                channels[ch] = calibrate_channel(ch)
+            cal_path = os.path.join(os.path.dirname(__file__), "cfx_calibration.json")
+            with open(cal_path, "w", encoding="utf-8") as f:
+                json.dump(channels, f, indent=2)
+            print(f"\n[OK] Calibration saved to {cal_path}")
+            # Ask interactive user for click delay unless no-prompt is set
+            if not args.no_prompt:
+                try:
+                    dd = input('Click delay in ms (default 20): ').strip()
+                    click_delay = int(dd) if dd else args.click_delay
+                except Exception:
+                    click_delay = args.click_delay
+            else:
+                click_delay = args.click_delay
+            ahk_path = os.path.join(os.path.dirname(__file__), "RekordboxCFX.ahk")
+            ahk_code = generate_ahk(channels, click_delay=click_delay)
+            with open(ahk_path, "w", encoding="utf-8") as f:
+                f.write(ahk_code)
+            print(f"[OK] AHK script written to {ahk_path}")
+        elif choice == '2':
+            p = input('Path to calibration JSON (leave empty for cfx_calibration.json): ').strip()
+            cal_path = p if p else os.path.join(os.path.dirname(__file__), "cfx_calibration.json")
+            if not os.path.exists(cal_path):
+                print(f"[ERROR] Calibration JSON not found at {cal_path}")
+                continue
+            with open(cal_path, "r", encoding="utf-8") as f:
+                channels = json.load(f)
+                channels = {int(k): v for k, v in channels.items()}
+            # Ask interactive user for click delay unless no-prompt is set
+            if not args.no_prompt:
+                try:
+                    dd = input('Click delay in ms (default 20): ').strip()
+                    click_delay = int(dd) if dd else args.click_delay
+                except Exception:
+                    click_delay = args.click_delay
+            else:
+                click_delay = args.click_delay
+            ahk_path = os.path.join(os.path.dirname(__file__), "RekordboxCFX.ahk")
+            ahk_code = generate_ahk(channels, click_delay=click_delay)
+            with open(ahk_path, "w", encoding="utf-8") as f:
+                f.write(ahk_code)
+            print(f"[OK] AHK script written to {ahk_path}")
+        elif choice == '3':
+            parser.print_help()
+        elif choice == '4':
+            print('Goodbye.')
+            break
+        else:
+            print('[ERROR] Invalid selection.')
 
     print()
     print("╔══════════════════════════════════════════════╗")
