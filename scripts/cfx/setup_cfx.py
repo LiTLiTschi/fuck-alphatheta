@@ -86,10 +86,10 @@ ClickCFX(ox, oy, ty) {
 """
 
 MODIFIERS = {
-    1: "^!",          ; Ctrl+Alt
-    2: "^+",          ; Ctrl+Shift
-    3: "!+",          ; Alt+Shift
-    4: "^!+",         ; Ctrl+Alt+Shift
+    1: "^!",          # Ctrl+Alt
+    2: "^+",          # Ctrl+Shift
+    3: "!+",          # Alt+Shift
+    4: "^!+",         # Ctrl+Alt+Shift
 }
 
 # Python dict (AHK comment block above is illustrative — real mapping below)
