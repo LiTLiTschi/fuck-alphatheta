@@ -128,6 +128,8 @@ if not exist "%AHK_SCRIPT%" (
 )
 
 set AHK2EXE=
+if exist "%SCRIPT_DIR%..\..\Ahk2Exe.exe" (set "AHK2EXE=%SCRIPT_DIR%..\..\Ahk2Exe.exe")
+if exist "%SCRIPT_DIR%Ahk2Exe.exe" (set "AHK2EXE=%SCRIPT_DIR%Ahk2Exe.exe")
 if exist "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"    set "AHK2EXE=C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
 if exist "C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe"          set "AHK2EXE=C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe"
 
