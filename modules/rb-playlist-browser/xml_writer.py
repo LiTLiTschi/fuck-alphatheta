@@ -18,31 +18,17 @@ def delete_node(library: Library, node: PlaylistNode, parent: PlaylistNode) -> N
 
 
 def _fix_xml(body: str) -> str:
-    """Fix two Rekordbox XML serialization issues introduced by ElementTree:
-
-    1. ET.indent() adds Count="0" to every NODE element, including playlist
-       nodes (Type="1"). Rekordbox only accepts Count on folder nodes (Type="0").
-       Strip Count="0" (or any Count="...") from Type="1" nodes.
-
-    2. Python 3.8+ ET serialises self-closing tags as ' />' (space before slash).
-       Rekordbox's strict parser rejects this — remove the space.
-    """
-    # Issue 1: remove Count="..." from playlist NODEs (Type="1")
     body = re.sub(
         r'(<NODE\b[^>]*?\bType="1"[^>]*?)\s+Count="[^"]*"',
         r'\1',
         body,
     )
-    # Also handle attribute order where Count appears before Type
     body = re.sub(
         r'(<NODE\b[^>]*?)\s+Count="[^"]*"([^>]*?\bType="1"[^>]*?>)',
         r'\1\2',
         body,
     )
-
-    # Issue 2: remove space before self-closing />
     body = re.sub(r' />', '/>', body)
-
     return body
 
 
