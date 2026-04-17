@@ -1,0 +1,112 @@
+/* rb-playlist-browser — matches fuck-alphatheta color scheme */
+
+$primary: #00d9ff;
+$primary-darken-1: #00a8cc;
+$primary-darken-2: #007799;
+$surface: #0e0e0e;
+$panel: #1a1a1a;
+$panel-dark: #111111;
+$text: #ffffff;
+$text-muted: #888888;
+$warning: #ffff00;
+$error: #ff0000;
+$success: #00ff00;
+
+Screen {
+    background: $surface;
+}
+
+Header {
+    dock: top;
+    height: 3;
+    background: $primary-darken-2;
+    color: $text;
+}
+
+Footer {
+    dock: bottom;
+    height: 1;
+    background: $panel;
+}
+
+#browser-container {
+    width: 100%;
+    height: 1fr;
+    layout: horizontal;
+}
+
+#tree-pane {
+    width: 1fr;
+    height: 100%;
+    border-right: solid $primary-darken-1;
+}
+
+Tree {
+    width: 100%;
+    height: 100%;
+    padding: 0 1;
+    background: $surface;
+}
+
+Tree > .tree--cursor {
+    background: $primary 25%;
+    color: $text;
+}
+
+Tree:focus > .tree--cursor {
+    background: $primary 40%;
+}
+
+#detail-pane {
+    width: 2fr;
+    height: 100%;
+    padding: 1 2;
+}
+
+#detail-title {
+    width: 100%;
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+    padding-bottom: 1;
+    border-bottom: solid $primary-darken-1;
+}
+
+DataTable {
+    height: 1fr;
+    background: $panel-dark;
+    border: solid $primary-darken-1;
+}
+
+DataTable > .datatable--cursor {
+    background: $primary 20%;
+}
+
+DataTable > .datatable--header {
+    background: $primary-darken-2;
+    color: $text;
+    text-style: bold;
+}
+
+RenameBar {
+    dock: bottom;
+    height: 3;
+    background: $panel;
+    border-top: solid $primary;
+    padding: 0 2;
+    layout: horizontal;
+}
+
+#rename-label {
+    width: auto;
+    color: $primary;
+    content-align: left middle;
+    padding-right: 1;
+}
+
+#rename-input {
+    width: 1fr;
+    background: $panel-dark;
+    border: solid $primary-darken-1;
+    color: $text;
+}
