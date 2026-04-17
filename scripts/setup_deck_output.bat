@@ -56,7 +56,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-pip install mss pillow numpy opencv-python pytesseract pywin32
+pip install mss pillow numpy opencv-python pytesseract pywin32 python-rtmidi
 if errorlevel 1 (
     echo ERROR: Dependency-Installation fehlgeschlagen.
     pause
@@ -113,7 +113,8 @@ echo   %SCRIPTDIR%rekordbox_deck_output.ahk
 echo   %CONFIGFILE%
 echo   %SCRIPTDIR%deck_state.txt  (wird zur Laufzeit geschrieben)
 echo.
-echo In AHK einfach rekordbox_deck_output.ahk includen oder direkt starten.
+echo MIDI: python rekordbox_deck_output.py --list-midi
+echo       python rekordbox_deck_output.py --midi-port "loopMIDI" --debug
 echo.
 pause
 endlocal
