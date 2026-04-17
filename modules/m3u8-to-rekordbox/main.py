@@ -1,3 +1,4 @@
+import shutil
 import sys
 from pathlib import Path
 
@@ -6,15 +7,16 @@ from xml_merger import upsert_mamuma
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python main.py <m3u8_folder> <rekordbox.xml>", file=sys.stderr)
+    if len(sys.argv) != 4:
+        print("Usage: python main.py <m3u8_folder> <input.xml> <output.xml>", file=sys.stderr)
         sys.exit(1)
 
     m3u8_folder = Path(sys.argv[1])
-    xml_path = Path(sys.argv[2])
+    input_xml   = Path(sys.argv[2])
+    output_xml  = Path(sys.argv[3])
 
-    if not xml_path.exists():
-        print(f"Error: XML file not found: {xml_path}", file=sys.stderr)
+    if not input_xml.exists():
+        print(f"Error: input XML not found: {input_xml}", file=sys.stderr)
         sys.exit(1)
 
     if not m3u8_folder.is_dir():
@@ -26,8 +28,12 @@ def main():
         print("Warning: no .m3u8 files found — nothing to import.")
         sys.exit(0)
 
-    upsert_mamuma(xml_path, playlists)
-    print(f"Done. Imported {len(playlists)} playlist(s) into mamuma/")
+    # Copy input to output first so upsert_mamuma works on the output file
+    output_xml.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(input_xml, output_xml)
+
+    upsert_mamuma(output_xml, playlists)
+    print(f"Done. Imported {len(playlists)} playlist(s) into mamuma/ -> {output_xml}")
 
 
 if __name__ == "__main__":
