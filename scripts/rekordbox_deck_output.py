@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import time
+from collections import deque
 from pathlib import Path
 
 import cv2
@@ -125,10 +126,8 @@ def _arrow_picker(title, subtitle, ports):
 def choose_midi_port_interactive():
     """
     Two-step arrow-key MIDI port picker.
-
-    Step 1: pick the OUTPUT port (script sends here).
-    Step 2: pick the INPUT port (DAW / MIDI monitor listens here).
-
+    Step 1: OUTPUT port (script sends here).
+    Step 2: INPUT port (DAW / MIDI monitor listens here).
     Returns (rtmidi.MidiOut, out_port_name, in_port_name) or None if cancelled.
     """
     if rtmidi is None:
@@ -136,7 +135,6 @@ def choose_midi_port_interactive():
         print("       Run: pip install python-rtmidi")
         return None
 
-    # Single MidiOut instance — reused for both listing and opening
     mo, out_ports = _get_out_ports()
     in_ports      = _get_in_ports()
 
@@ -149,7 +147,6 @@ def choose_midi_port_interactive():
         print()
         return None
 
-    # --- Step 1: output port ---
     out_idx = _arrow_picker(
         "MIDI Setup  (1/2)  —  SELECT OUTPUT PORT",
         "This script SENDS MIDI on this port.",
@@ -161,16 +158,11 @@ def choose_midi_port_interactive():
     mo.open_port(out_idx)
     out_name = out_ports[out_idx]
 
-    # --- Step 2: input port ---
     if not in_ports:
         _clear()
-        print()
         print(f"  Output port opened : {out_name}")
-        print()
         print("  WARNING: No MIDI INPUT ports found.")
-        print("  Your DAW / MIDI monitor cannot receive until an input port exists.")
         print("  (loopMIDI creates a matching input port automatically.)")
-        print()
         return mo, out_name, None
 
     in_idx = _arrow_picker(
@@ -182,12 +174,9 @@ def choose_midi_port_interactive():
         return None
 
     in_name = in_ports[in_idx]
-
     _clear()
-    print()
     print(f"  Output port (script sends)  : {out_name}")
     print(f"  Input port  (DAW listens)   : {in_name}")
-    print()
     print(f"  >>> Open '{in_name}' as INPUT in your DAW / MIDI monitor now.")
     print()
     return mo, out_name, in_name
@@ -205,8 +194,6 @@ class MidiOutput:
         self.channel      = max(1, min(16, int(channel))) - 1
         self.midi         = None
         self.opened_name  = port_name or ""
-        # Name of the INPUT port the user should open in their DAW.
-        # Used in status lines and test instructions only — not opened by this script.
         self.in_port_name = in_port_name or ""
 
         if midi_out is not None:
@@ -214,7 +201,6 @@ class MidiOutput:
             return
 
         if port_substr and rtmidi is not None:
-            # Reuse a single MidiOut instance to avoid stale port enumeration
             mo, ports = _get_out_ports()
             needle    = port_substr.lower()
             for i, name in enumerate(ports):
@@ -222,7 +208,6 @@ class MidiOutput:
                     mo.open_port(i)
                     self.midi        = mo
                     self.opened_name = name
-                    # best-guess input port if none was explicitly chosen
                     if not self.in_port_name:
                         in_ports = _get_in_ports()
                         match = next((p for p in in_ports if needle in p.lower()), None)
@@ -239,7 +224,6 @@ class MidiOutput:
         self.midi.send_message([status, int(cc) & 0x7F, max(0, min(127, int(value)))])
 
     def test(self, cc_left=20, cc_right=21):
-        """Send a quick test pulse so the user can verify the connection."""
         if not self.available():
             print("  MIDI not available, skipping test.")
             return
@@ -266,13 +250,73 @@ class MidiOutput:
         else:
             print()
             print("  MIDI not received. Common causes:")
-            print("    1. DAW/monitor is open on the OUTPUT port, not the INPUT port.")
+            print("    1. DAW/monitor is open on OUTPUT port, not INPUT port.")
             if self.in_port_name:
                 print(f"       Make sure it is listening on INPUT port: '{self.in_port_name}'")
             print("    2. loopMIDI is not running (check the system tray).")
             print(f"    3. Wrong MIDI channel: script sends on ch {self.channel + 1}.")
             print(f"       Set your DAW to receive on channel {self.channel + 1} or 'All'.")
             print()
+
+
+# ---------------------------------------------------------------------------
+# Live dashboard
+# ---------------------------------------------------------------------------
+
+LOG_LINES = 8
+
+def _render_dashboard(ocr_left, ocr_right, cc_left_num, cc_right_num,
+                      last_cc_left, last_cc_right, midi, log):
+    """
+    Renders a fixed-height terminal dashboard in-place.
+    Call once per poll tick; uses ANSI cursor movement to redraw without flicker.
+    """
+    lines = []
+    lines.append("┌" + "─" * 58 + "┐")
+    lines.append("│  Rekordbox Deck Output  —  LIVE" + " " * 25 + "│")
+    lines.append("├" + "─" * 58 + "┤")
+
+    # OCR row
+    l_str = f"Deck {ocr_left}" if ocr_left != "?" else "  ???  "
+    r_str = f"Deck {ocr_right}" if ocr_right != "?" else "  ???  "
+    ocr_row = f"  OCR    LEFT: {l_str:<10}  RIGHT: {r_str:<10}"
+    lines.append(f"│{ocr_row:<58}│")
+
+    # MIDI CC row
+    cc_row = f"  MIDI   CC{cc_left_num}={last_cc_left:<4}  CC{cc_right_num}={last_cc_right:<4}  ch={midi.channel + 1 if midi else '-'}"
+    lines.append(f"│{cc_row:<58}│")
+
+    # Port rows
+    if midi and midi.available():
+        out_row = f"  OUT →  {midi.opened_name}"
+        in_row  = f"  IN  ←  {midi.in_port_name or '(not set — use --choose-midi)'}"
+    else:
+        out_row = "  OUT →  (MIDI disabled)"
+        in_row  = "  IN  ←  (MIDI disabled)"
+    lines.append(f"│{out_row:<58}│")
+    lines.append(f"│{in_row:<58}│")
+
+    lines.append("├" + "─" * 58 + "┤")
+    lines.append("│  Recent events" + " " * 43 + "│")
+
+    # Rolling log
+    for entry in list(log)[-LOG_LINES:]:
+        lines.append(f"│  {entry:<56}│")
+    # pad to fixed height
+    for _ in range(LOG_LINES - min(len(log), LOG_LINES)):
+        lines.append("│" + " " * 58 + "│")
+
+    lines.append("└" + "─" * 58 + "┘")
+    lines.append("  Ctrl+C to stop")
+
+    total = len(lines)
+    # Move cursor up by total lines (after first render) then overwrite
+    sys.stdout.write(f"\x1b[{total}A" if _render_dashboard._drawn else "")
+    sys.stdout.write("\n".join(lines) + "\n")
+    sys.stdout.flush()
+    _render_dashboard._drawn = True
+
+_render_dashboard._drawn = False
 
 
 # ---------------------------------------------------------------------------
@@ -367,35 +411,60 @@ class DeckDetector:
             )
 
     def run_live(self, write_txt=None, write_json=None, interval_ms=80, debug=False,
-                 midi=None, cc_left=20, cc_right=21):
+                 live=False, midi=None, cc_left=20, cc_right=21):
         if not self.config:
             raise RuntimeError("No config found. Run with --setup first.")
-        if midi and midi.available():
+
+        if live:
+            _clear()
+        elif midi and midi.available():
             print(f"  MIDI output : {midi.opened_name}  ch={midi.channel + 1}  CC-left={cc_left}  CC-right={cc_right}")
             if midi.in_port_name:
                 print(f"  DAW input   : {midi.in_port_name}")
+            print("  Running. Ctrl+C to stop.")
         else:
-            print("  MIDI disabled.")
-        print("  Running. Ctrl+C to stop.")
-        pending      = None
-        pending_hits = 0
-        last_written = None
+            print("  MIDI disabled. Running. Ctrl+C to stop.")
+
+        pending       = None
+        pending_hits  = 0
+        last_written  = None
+        last_cc_left  = 0
+        last_cc_right = 0
+        log           = deque(maxlen=LOG_LINES)
+
         while True:
             state = self.detect()
             pair  = (state["left"], state["right"])
+
             if pair == pending:
                 pending_hits += 1
             else:
                 pending      = pair
                 pending_hits = 1
+
             if pending_hits >= 2 and pair != last_written:
                 self.write_state(state, write_txt=write_txt, write_json=write_json)
+                val_l = 0 if state["left"]  == "?" else int(state["left"])
+                val_r = 0 if state["right"] == "?" else int(state["right"])
                 if midi:
-                    midi.send_cc(cc_left,  0 if state["left"]  == "?" else int(state["left"]))
-                    midi.send_cc(cc_right, 0 if state["right"] == "?" else int(state["right"]))
+                    midi.send_cc(cc_left,  val_l)
+                    midi.send_cc(cc_right, val_r)
+                last_cc_left  = val_l
+                last_cc_right = val_r
+                ts = time.strftime("%H:%M:%S")
+                log.append(f"{ts}  L={state['left']} R={state['right']}  CC{cc_left}={val_l} CC{cc_right}={val_r}")
                 last_written = pair
-                if debug:
-                    print(f"  L={state['left']} R={state['right']}")
+                if debug and not live:
+                    print(f"  L={state['left']} R={state['right']}  CC{cc_left}={val_l} CC{cc_right}={val_r}")
+
+            if live:
+                _render_dashboard(
+                    state["left"], state["right"],
+                    cc_left, cc_right,
+                    last_cc_left, last_cc_right,
+                    midi, log,
+                )
+
             time.sleep(interval_ms / 1000.0)
 
     def wait_key(self, key):
@@ -511,7 +580,9 @@ def main():
     parser.add_argument("--setup",    action="store_true", help="Run interactive calibration wizard")
     parser.add_argument("--config",   default="deck_output_config.json", help="Calibration config file")
     parser.add_argument("--interval", type=int, default=80, help="Screen-poll interval in ms")
-    parser.add_argument("--debug",    action="store_true", help="Print every deck-change to stdout")
+    parser.add_argument("--debug",    action="store_true", help="Print every deck-change to stdout (plain text)")
+    parser.add_argument("--live",     action="store_true",
+                        help="Show real-time dashboard: OCR values, last CC sent, MIDI ports, event log")
 
     gf = parser.add_argument_group("file output")
     gf.add_argument("--write-txt",  default="deck_state.txt", help="Text file updated on deck change")
@@ -608,6 +679,7 @@ def main():
                 write_json=args.write_json or None,
                 interval_ms=args.interval,
                 debug=args.debug,
+                live=args.live,
                 midi=midi,
                 cc_left=args.midi_cc_left,
                 cc_right=args.midi_cc_right,
