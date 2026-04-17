@@ -83,13 +83,48 @@ def _get_in_ports():
     return rtmidi.MidiIn().get_ports()
 
 
+def _arrow_picker(title, subtitle, ports):
+    """
+    Generic arrow-key picker.
+    Returns selected index, or None if cancelled (Q).
+    """
+    idx = 0
+    while True:
+        _clear()
+        print("=" * 60)
+        print(f"  {title}")
+        print("=" * 60)
+        if subtitle:
+            print()
+            print(f"  {subtitle}")
+        print()
+        for i, name in enumerate(ports):
+            cursor = "  >>" if i == idx else "    "
+            print(f"{cursor}  {i + 1:>2}.  {name}")
+        print()
+        print("  UP / DOWN  navigate    ENTER  confirm    Q  cancel")
+        print()
+        kind, val = _read_key()
+        if kind == 'char':
+            if val in (b'\r', b'\n'):
+                return idx
+            if val in (b'q', b'Q'):
+                return None
+        elif kind == 'special':
+            if val == b'H':    # UP
+                idx = (idx - 1) % len(ports)
+            elif val == b'P':  # DOWN
+                idx = (idx + 1) % len(ports)
+
+
 def choose_midi_port_interactive():
     """
-    Arrow-key MIDI port picker.
-    Shows OUTPUT ports (what this script sends on) and INPUT ports
-    (what your DAW / MIDI monitor must listen on).
+    Two-step arrow-key MIDI port picker.
 
-    Returns (rtmidi.MidiOut, out_port_name) or None if cancelled.
+    Step 1: pick the OUTPUT port (script sends here).
+    Step 2: pick the INPUT port (DAW / MIDI monitor listens here).
+
+    Returns (rtmidi.MidiOut, out_port_name, in_port_name) or None if cancelled.
     """
     if rtmidi is None:
         print("ERROR: python-rtmidi is not installed.")
@@ -103,100 +138,84 @@ def choose_midi_port_interactive():
         print()
         print("  No MIDI OUTPUT ports found.")
         print("  Create a virtual loopback port first:")
-        print("    Windows : install loopMIDI  https://www.tobias-erichsen.de/software/loopmidi.html")
+        print("    Windows: install loopMIDI  https://www.tobias-erichsen.de/software/loopmidi.html")
         print("    then restart this script.")
         print()
         return None
 
-    idx = 0
-    while True:
+    # --- Step 1: output port ---
+    out_idx = _arrow_picker(
+        "MIDI Setup  (1/2)  —  SELECT OUTPUT PORT",
+        "This script SENDS MIDI on this port.",
+        out_ports,
+    )
+    if out_idx is None:
+        return None
+
+    mo = rtmidi.MidiOut()
+    mo.open_port(out_idx)
+    out_name = out_ports[out_idx]
+
+    # --- Step 2: input port ---
+    if not in_ports:
         _clear()
-        print("=" * 60)
-        print("  MIDI Port Setup")
-        print("=" * 60)
         print()
-        print("  This script SENDS on an OUTPUT port.")
-        print("  Your DAW / MIDI monitor must RECEIVE on the matching INPUT port.")
+        print(f"  Output port opened : {out_name}")
         print()
+        print("  WARNING: No MIDI INPUT ports found.")
+        print("  Your DAW / MIDI monitor cannot receive until an input port exists.")
+        print("  (loopMIDI creates a matching input port automatically.)")
+        print()
+        return mo, out_name, None
 
-        # Output port picker
-        print("  -- SELECT OUTPUT PORT (script sends here) --")
-        for i, name in enumerate(out_ports):
-            cursor = "  >>" if i == idx else "    "
-            print(f"{cursor}  {i + 1:>2}.  {name}")
-        print()
+    in_idx = _arrow_picker(
+        "MIDI Setup  (2/2)  —  SELECT INPUT PORT",
+        "Open THIS port as INPUT in your DAW / MIDI monitor.",
+        in_ports,
+    )
+    if in_idx is None:
+        return None
 
-        # Input ports reference (read-only, for user orientation)
-        print("  -- INPUT PORTS visible to your DAW / monitor (for reference) --")
-        if in_ports:
-            for i, name in enumerate(in_ports):
-                print(f"        {i + 1:>2}.  {name}")
-        else:
-            print("        (none found)")
-        print()
-        print("  UP / DOWN  navigate output ports")
-        print("  ENTER      confirm selection")
-        print("  Q          cancel")
-        print()
+    in_name = in_ports[in_idx]
 
-        kind, val = _read_key()
-        if kind == 'char':
-            if val in (b'\r', b'\n'):
-                mo = rtmidi.MidiOut()
-                mo.open_port(idx)
-                selected_name = out_ports[idx]
-                _clear()
-                print()
-                print(f"  Output port opened : {selected_name}")
-                print()
-                # Tell the user exactly which INPUT port to open in their DAW
-                match = next((p for p in in_ports if selected_name.lower().split()[0] in p.lower()), None)
-                if match:
-                    print(f"  >>> In your DAW / MIDI monitor, open INPUT port: '{match}'")
-                else:
-                    print("  >>> In your DAW / MIDI monitor, open the INPUT port")
-                    print(f"      that corresponds to '{selected_name}'.")
-                    if in_ports:
-                        print("      Available input ports:")
-                        for p in in_ports:
-                            print(f"        - {p}")
-                print()
-                return mo, selected_name
-            if val in (b'q', b'Q'):
-                return None
-        elif kind == 'special':
-            if val == b'H':    # UP
-                idx = (idx - 1) % len(out_ports)
-            elif val == b'P':  # DOWN
-                idx = (idx + 1) % len(out_ports)
+    _clear()
+    print()
+    print(f"  Output port (script sends)  : {out_name}")
+    print(f"  Input port  (DAW listens)   : {in_name}")
+    print()
+    print(f"  >>> Open '{in_name}' as INPUT in your DAW / MIDI monitor now.")
+    print()
+    return mo, out_name, in_name
 
 
 class MidiOutput:
     """Wraps an already-opened rtmidi.MidiOut or opens one by port substring."""
 
-    def __init__(self, midi_out=None, port_name=None, port_substr=None, channel=1):
-        self.channel = max(1, min(16, int(channel))) - 1
-        self.midi = None
-        self.opened_name = port_name or ""
+    def __init__(self, midi_out=None, port_name=None, in_port_name=None,
+                 port_substr=None, channel=1):
+        self.channel      = max(1, min(16, int(channel))) - 1
+        self.midi         = None
+        self.opened_name  = port_name or ""
+        self.in_port_name = in_port_name or ""
 
         if midi_out is not None:
             self.midi = midi_out
             return
 
         if port_substr and rtmidi is not None:
-            mo = rtmidi.MidiOut()
-            ports = mo.get_ports()
+            mo     = rtmidi.MidiOut()
+            ports  = mo.get_ports()
             needle = port_substr.lower()
             for i, name in enumerate(ports):
                 if needle in name.lower():
                     mo.open_port(i)
-                    self.midi = mo
+                    self.midi        = mo
                     self.opened_name = name
-                    # Print which INPUT port to use in DAW
-                    in_ports = _get_in_ports()
-                    match = next((p for p in in_ports if needle in p.lower()), None)
-                    if match:
-                        print(f"  >>> In your DAW / MIDI monitor open INPUT port: '{match}'")
+                    # best-guess input port if none was explicitly chosen
+                    if not self.in_port_name:
+                        in_ports = _get_in_ports()
+                        match = next((p for p in in_ports if needle in p.lower()), None)
+                        self.in_port_name = match or ""
                     return
 
     def available(self):
@@ -213,17 +232,16 @@ class MidiOutput:
         if not self.available():
             print("  MIDI not available, skipping test.")
             return
-        in_ports = _get_in_ports()
-        match = next((p for p in in_ports if self.opened_name.lower().split()[0] in p.lower()), None)
         print()
         print("  ---- MIDI Test ----")
         print(f"  Sending on OUTPUT port : {self.opened_name}")
-        if match:
-            print(f"  Open INPUT port in DAW : {match}")
+        if self.in_port_name:
+            print(f"  >>> Your DAW / monitor INPUT port : {self.in_port_name}")
         else:
-            print("  Open the matching INPUT port in your DAW / MIDI monitor.")
-        print(f"  Sending: CC{cc_left}=1, CC{cc_right}=2  then CC{cc_left}=0, CC{cc_right}=0")
-        print("  Check your MIDI monitor for incoming CC messages now...")
+            print("  >>> Open the matching INPUT port in your DAW / MIDI monitor.")
+        print(f"  Sending: CC{cc_left}=1, CC{cc_right}=2  then  CC{cc_left}=0, CC{cc_right}=0")
+        print("  Watch your MIDI monitor for incoming CC messages...")
+        print()
         self.send_cc(cc_left, 1)
         time.sleep(0.2)
         self.send_cc(cc_right, 2)
@@ -233,14 +251,15 @@ class MidiOutput:
         print("  Test sent. Did your MIDI monitor show the messages? (y/n)")
         kind, val = _read_key()
         if kind == 'char' and val in (b'y', b'Y'):
-            print("  Great - MIDI is working!")
+            print("  Great — MIDI is working!")
         else:
             print()
             print("  MIDI not received. Common causes:")
-            print("    1. DAW/monitor is listening on OUTPUT port instead of INPUT port.")
-            print("       Switch it to the INPUT side of the same virtual device.")
-            print("    2. loopMIDI port is not running (check the loopMIDI app in the tray).")
-            print("    3. Wrong MIDI channel: script sends on ch", self.channel + 1)
+            print("    1. DAW/monitor is open on the OUTPUT port, not the INPUT port.")
+            if self.in_port_name:
+                print(f"       Make sure it is listening on INPUT port: '{self.in_port_name}'")
+            print("    2. loopMIDI is not running (check the system tray).")
+            print(f"    3. Wrong MIDI channel: script sends on ch {self.channel + 1}.")
             print(f"       Set your DAW to receive on channel {self.channel + 1} or 'All'.")
             print()
 
@@ -297,8 +316,8 @@ class DeckDetector:
 
     def detect_side(self, side_name):
         side = self.config["sides"][side_name]
-        img = self.grab(side["region"])
-        bw = self.preprocess(
+        img  = self.grab(side["region"])
+        bw   = self.preprocess(
             img,
             threshold=side.get("threshold", 170),
             invert=side.get("invert", False),
@@ -318,7 +337,7 @@ class DeckDetector:
         return digit, bw
 
     def detect(self):
-        left, _ = self.detect_side("left")
+        left,  _ = self.detect_side("left")
         right, _ = self.detect_side("right")
         return {"left": left, "right": right, "ts": time.time()}
 
@@ -341,25 +360,27 @@ class DeckDetector:
         if not self.config:
             raise RuntimeError("No config found. Run with --setup first.")
         if midi and midi.available():
-            print(f"  MIDI active : {midi.opened_name}  ch={midi.channel + 1}  CC-left={cc_left}  CC-right={cc_right}")
+            print(f"  MIDI output : {midi.opened_name}  ch={midi.channel + 1}  CC-left={cc_left}  CC-right={cc_right}")
+            if midi.in_port_name:
+                print(f"  DAW input   : {midi.in_port_name}")
         else:
             print("  MIDI disabled.")
         print("  Running. Ctrl+C to stop.")
-        pending = None
+        pending      = None
         pending_hits = 0
         last_written = None
         while True:
             state = self.detect()
-            pair = (state["left"], state["right"])
+            pair  = (state["left"], state["right"])
             if pair == pending:
                 pending_hits += 1
             else:
-                pending = pair
+                pending      = pair
                 pending_hits = 1
             if pending_hits >= 2 and pair != last_written:
                 self.write_state(state, write_txt=write_txt, write_json=write_json)
                 if midi:
-                    midi.send_cc(cc_left, 0 if state["left"] == "?" else int(state["left"]))
+                    midi.send_cc(cc_left,  0 if state["left"]  == "?" else int(state["left"]))
                     midi.send_cc(cc_right, 0 if state["right"] == "?" else int(state["right"]))
                 last_written = pair
                 if debug:
@@ -377,9 +398,9 @@ class DeckDetector:
 
     def pick_region(self, label):
         print()
-        print(f"  [{label}] Move mouse to the TOP-LEFT of the deck number, then press S.")
+        print(f"  [{label}] Move mouse to TOP-LEFT of the deck number, then press S.")
         p1 = self.wait_key("S")
-        print(f"  [{label}] Move mouse to the BOTTOM-RIGHT of the deck number, then press E.")
+        print(f"  [{label}] Move mouse to BOTTOM-RIGHT of the deck number, then press E.")
         p2 = self.wait_key("E")
         x1, y1 = p1
         x2, y2 = p2
@@ -392,9 +413,9 @@ class DeckDetector:
 
     def tune_region(self, label, region):
         threshold = 170
-        invert = False
-        scale = 10
-        window = f"Deck OCR Setup - {label}"
+        invert    = False
+        scale     = 10
+        window    = f"Deck OCR Setup - {label}"
         cv2.namedWindow(window, cv2.WINDOW_NORMAL)
         print()
         print(f"  [{label}] Preview window open (click it to focus).")
@@ -403,39 +424,40 @@ class DeckDetector:
         print("    9 / 0   scale down / up")
         print("    ENTER   accept      ESC  cancel")
         while True:
-            img = self.grab(region)
-            bw = self.preprocess(img, threshold=threshold, invert=invert, scale=scale)
-            digit = self.ocr_digit(bw)
+            img    = self.grab(region)
+            bw     = self.preprocess(img, threshold=threshold, invert=invert, scale=scale)
+            digit  = self.ocr_digit(bw)
             preview = cv2.cvtColor(bw, cv2.COLOR_GRAY2BGR)
-            cv2.putText(preview, f"{label}: {digit}", (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2, cv2.LINE_AA)
-            cv2.putText(preview, f"thr={threshold} inv={invert} scale={scale}", (12, preview.shape[0] - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 0), 2, cv2.LINE_AA)
+            cv2.putText(preview, f"{label}: {digit}", (12, 28),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(preview, f"thr={threshold} inv={invert} scale={scale}",
+                        (12, preview.shape[0] - 14),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 0), 2, cv2.LINE_AA)
             cv2.imshow(window, preview)
             key = cv2.waitKey(25) & 0xFF
-            if key in (13, 10):   break
-            elif key == 27:       cv2.destroyWindow(window); raise KeyboardInterrupt()
+            if   key in (13, 10):                             break
+            elif key == 27:       cv2.destroyWindow(window);  raise KeyboardInterrupt()
             elif key in (ord(']'), ord('='), ord('+')): threshold = min(250, threshold + 1)
-            elif key in (ord('['), ord('-'), ord('_')): threshold = max(1, threshold - 1)
+            elif key in (ord('['), ord('-'), ord('_')): threshold = max(1,   threshold - 1)
             elif key in (ord('i'), ord('I')):           invert = not invert
-            elif key == ord('0'):  scale = min(20, scale + 1)
-            elif key == ord('9'):  scale = max(4, scale - 1)
+            elif key == ord('0'): scale = min(20, scale + 1)
+            elif key == ord('9'): scale = max(4,  scale - 1)
         cv2.destroyWindow(window)
         return {"region": region, "threshold": threshold, "invert": invert, "scale": scale}
 
     def run_setup(self, midi=None, cc_left=20, cc_right=21):
         _clear()
         print("=" * 60)
-        print("  Rekordbox Deck Output  --  Setup Wizard")
+        print("  Rekordbox Deck Output  —  Setup Wizard")
         print("=" * 60)
         print()
         if midi and midi.available():
-            in_ports = _get_in_ports()
-            match = next((p for p in in_ports if midi.opened_name.lower().split()[0] in p.lower()), None)
             print(f"  MIDI output port : {midi.opened_name}  (ch {midi.channel + 1})")
-            if match:
-                print(f"  >>> Open INPUT port '{match}' in your DAW / MIDI monitor.")
+            if midi.in_port_name:
+                print(f"  DAW input port   : {midi.in_port_name}")
+                print(f"  >>> Open '{midi.in_port_name}' as INPUT in your DAW / MIDI monitor.")
             else:
-                print("  >>> In your DAW / MIDI monitor open the INPUT side of:")
-                print(f"      '{midi.opened_name}'")
+                print("  >>> Open the matching INPUT port in your DAW / MIDI monitor.")
             print()
         else:
             print("  MIDI: disabled  (use --choose-midi or --midi-port to enable)")
@@ -472,29 +494,29 @@ class DeckDetector:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Rekordbox deck-number OCR output tool",
+        description="Rekordbox deck-number OCR → MIDI CC output",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--setup",    action="store_true", help="Run the interactive calibration wizard")
-    parser.add_argument("--config",   default="deck_output_config.json", help="Path to calibration config file")
+    parser.add_argument("--setup",    action="store_true", help="Run interactive calibration wizard")
+    parser.add_argument("--config",   default="deck_output_config.json", help="Calibration config file")
     parser.add_argument("--interval", type=int, default=80, help="Screen-poll interval in ms")
     parser.add_argument("--debug",    action="store_true", help="Print every deck-change to stdout")
 
     gf = parser.add_argument_group("file output")
-    gf.add_argument("--write-txt",  default="deck_state.txt", help="Text file updated on every deck change")
-    gf.add_argument("--write-json", default="",               help="Optional JSON file updated on every deck change")
+    gf.add_argument("--write-txt",  default="deck_state.txt", help="Text file updated on deck change")
+    gf.add_argument("--write-json", default="",               help="JSON file updated on deck change")
 
     gm = parser.add_argument_group(
         "MIDI output",
-        "Sends MIDI CC on deck change. CC value = deck number (1-4) or 0 when unknown.\n"
+        "Sends CC on deck change (value = deck 1-4, 0 = unknown).\n"
         "Requires: pip install python-rtmidi\n"
-        "IMPORTANT: this script sends on an OUTPUT port.\n"
-        "           Your DAW / monitor must listen on the matching INPUT port.",
+        "Script sends on OUTPUT port; DAW listens on INPUT port.",
     )
-    gm.add_argument("--list-midi",     action="store_true", help="Print all MIDI input and output ports, then exit")
-    gm.add_argument("--choose-midi",   action="store_true", help="Interactive arrow-key MIDI output port picker")
-    gm.add_argument("--midi-port",     default="",          help="Substring of MIDI output port name (e.g. 'loopMIDI')")
-    gm.add_argument("--midi-channel",  type=int, default=1, help="MIDI channel 1-16")
+    gm.add_argument("--list-midi",    action="store_true", help="List all MIDI ports then exit")
+    gm.add_argument("--choose-midi",  action="store_true", help="Two-step interactive port picker")
+    gm.add_argument("--midi-port",    default="",          help="Substring of MIDI output port name")
+    gm.add_argument("--midi-in-port", default="",          help="Substring of MIDI input port name (for display/test only)")
+    gm.add_argument("--midi-channel", type=int, default=1, help="MIDI channel 1-16")
     gm.add_argument("--midi-cc-left",  type=int, default=20, help="CC number for LEFT deck")
     gm.add_argument("--midi-cc-right", type=int, default=21, help="CC number for RIGHT deck")
 
@@ -508,16 +530,12 @@ def main():
         in_ports  = _get_in_ports()
         print()
         print("  OUTPUT ports (script sends here):")
-        if out_ports:
-            for i, n in enumerate(out_ports): print(f"    {i:>2}: {n}")
-        else:
-            print("    (none)")
+        for i, n in enumerate(out_ports): print(f"    {i:>2}: {n}")
+        if not out_ports: print("    (none)")
         print()
         print("  INPUT ports (DAW / MIDI monitor listens here):")
-        if in_ports:
-            for i, n in enumerate(in_ports):  print(f"    {i:>2}: {n}")
-        else:
-            print("    (none)")
+        for i, n in enumerate(in_ports):  print(f"    {i:>2}: {n}")
+        if not in_ports: print("    (none)")
         print()
         sys.exit(0)
 
@@ -531,17 +549,28 @@ def main():
     if args.choose_midi:
         result = choose_midi_port_interactive()
         if result:
-            mo, pname = result
-            midi = MidiOutput(midi_out=mo, port_name=pname, channel=args.midi_channel)
+            mo, out_name, in_name = result
+            midi = MidiOutput(midi_out=mo, port_name=out_name,
+                              in_port_name=in_name, channel=args.midi_channel)
         else:
             print("  MIDI selection cancelled. Running without MIDI.")
     elif args.midi_port:
         if rtmidi is None:
             print("WARN: python-rtmidi not installed  (pip install python-rtmidi)")
         else:
-            midi = MidiOutput(port_substr=args.midi_port, channel=args.midi_channel)
+            # resolve explicit in-port name if given
+            in_name = ""
+            if args.midi_in_port:
+                in_ports = _get_in_ports()
+                needle   = args.midi_in_port.lower()
+                in_name  = next((p for p in in_ports if needle in p.lower()), "")
+            midi = MidiOutput(port_substr=args.midi_port,
+                              in_port_name=in_name,
+                              channel=args.midi_channel)
             if midi.available():
-                print(f"  MIDI port opened: {midi.opened_name}")
+                print(f"  MIDI output port : {midi.opened_name}")
+                if midi.in_port_name:
+                    print(f"  DAW input port   : {midi.in_port_name}")
             else:
                 print(f"  WARN: No MIDI output port matching '{args.midi_port}'.")
                 print("        Use --list-midi or --choose-midi.")
@@ -550,7 +579,9 @@ def main():
 
     if args.setup:
         try:
-            detector.run_setup(midi=midi, cc_left=args.midi_cc_left, cc_right=args.midi_cc_right)
+            detector.run_setup(midi=midi,
+                               cc_left=args.midi_cc_left,
+                               cc_right=args.midi_cc_right)
         except KeyboardInterrupt:
             print("\n  Setup cancelled.")
     else:
