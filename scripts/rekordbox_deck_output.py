@@ -195,6 +195,7 @@ class MidiOutput:
         self.midi         = None
         self.opened_name  = port_name or ""
         self.in_port_name = in_port_name or ""
+        self.last_error   = ""   # set when send_cc catches a SystemError
 
         if midi_out is not None:
             self.midi = midi_out
@@ -218,10 +219,23 @@ class MidiOutput:
         return self.midi is not None
 
     def send_cc(self, cc, value):
+        """Send a CC message. If the Windows MM driver rejects it (e.g. loopMIDI
+        closed), marks the port dead and stores the error for the dashboard.
+        Returns True on success, False on failure.
+        """
         if not self.available():
-            return
+            return False
         status = 0xB0 | self.channel
-        self.midi.send_message([status, int(cc) & 0x7F, max(0, min(127, int(value)))])
+        try:
+            self.midi.send_message([status, int(cc) & 0x7F, max(0, min(127, int(value)))])
+            return True
+        except Exception as exc:
+            # MidiOutWinMM::sendMessage fires rtmidi.SystemError when the
+            # underlying Windows MM port handle is invalid (loopMIDI closed,
+            # device unplugged, etc.).  Mark dead so we stop trying.
+            self.last_error = str(exc)
+            self.midi = None
+            return False
 
     def test(self, cc_left=20, cc_right=21):
         if not self.available():
@@ -269,7 +283,7 @@ def _render_dashboard(ocr_left, ocr_right, cc_left_num, cc_right_num,
                       last_cc_left, last_cc_right, midi, log):
     """
     Renders a fixed-height terminal dashboard in-place.
-    Call once per poll tick; uses ANSI cursor movement to redraw without flicker.
+    Uses ANSI cursor movement to redraw without flicker.
     """
     lines = []
     lines.append("┌" + "─" * 58 + "┐")
@@ -282,13 +296,19 @@ def _render_dashboard(ocr_left, ocr_right, cc_left_num, cc_right_num,
     ocr_row = f"  OCR    LEFT: {l_str:<10}  RIGHT: {r_str:<10}"
     lines.append(f"│{ocr_row:<58}│")
 
-    # MIDI CC row
-    cc_row = f"  MIDI   CC{cc_left_num}={last_cc_left:<4}  CC{cc_right_num}={last_cc_right:<4}  ch={midi.channel + 1 if midi else '-'}"
-    lines.append(f"│{cc_row:<58}│")
+    # MIDI CC / status row
+    if midi and midi.last_error:
+        midi_row = f"  MIDI   PORT LOST — {midi.last_error[:36]}"
+    elif midi and midi.available():
+        midi_row = f"  MIDI   CC{cc_left_num}={last_cc_left:<4}  CC{cc_right_num}={last_cc_right:<4}  ch={midi.channel + 1}"
+    else:
+        midi_row = "  MIDI   disabled"
+    lines.append(f"│{midi_row:<58}│")
 
     # Port rows
-    if midi and midi.available():
-        out_row = f"  OUT →  {midi.opened_name}"
+    if midi and (midi.available() or midi.last_error):
+        status  = "(DEAD — reconnect loopMIDI and restart)" if midi.last_error else ""
+        out_row = f"  OUT →  {midi.opened_name}  {status}"
         in_row  = f"  IN  ←  {midi.in_port_name or '(not set — use --choose-midi)'}"
     else:
         out_row = "  OUT →  (MIDI disabled)"
@@ -299,10 +319,8 @@ def _render_dashboard(ocr_left, ocr_right, cc_left_num, cc_right_num,
     lines.append("├" + "─" * 58 + "┤")
     lines.append("│  Recent events" + " " * 43 + "│")
 
-    # Rolling log
     for entry in list(log)[-LOG_LINES:]:
         lines.append(f"│  {entry:<56}│")
-    # pad to fixed height
     for _ in range(LOG_LINES - min(len(log), LOG_LINES)):
         lines.append("│" + " " * 58 + "│")
 
@@ -310,7 +328,6 @@ def _render_dashboard(ocr_left, ocr_right, cc_left_num, cc_right_num,
     lines.append("  Ctrl+C to stop")
 
     total = len(lines)
-    # Move cursor up by total lines (after first render) then overwrite
     sys.stdout.write(f"\x1b[{total}A" if _render_dashboard._drawn else "")
     sys.stdout.write("\n".join(lines) + "\n")
     sys.stdout.flush()
@@ -447,8 +464,15 @@ class DeckDetector:
                 val_l = 0 if state["left"]  == "?" else int(state["left"])
                 val_r = 0 if state["right"] == "?" else int(state["right"])
                 if midi:
-                    midi.send_cc(cc_left,  val_l)
-                    midi.send_cc(cc_right, val_r)
+                    ok_l = midi.send_cc(cc_left,  val_l)
+                    ok_r = midi.send_cc(cc_right, val_r)
+                    # If port died mid-session, log it once
+                    if midi.last_error and (ok_l is False or ok_r is False):
+                        ts = time.strftime("%H:%M:%S")
+                        log.append(f"{ts}  MIDI ERROR: {midi.last_error[:44]}")
+                        if not live:
+                            print(f"  MIDI port lost: {midi.last_error}")
+                            print("  OCR continues. Restart script to reconnect MIDI.")
                 last_cc_left  = val_l
                 last_cc_right = val_r
                 ts = time.strftime("%H:%M:%S")
