@@ -72,9 +72,11 @@ if _tess:
 # ---------------------------------------------------------------------------
 
 def _get_out_ports():
+    """Return (MidiOut instance, list-of-port-names). Reuse the instance to avoid stale enumeration."""
     if rtmidi is None:
-        return []
-    return rtmidi.MidiOut().get_ports()
+        return None, []
+    mo = rtmidi.MidiOut()
+    return mo, mo.get_ports()
 
 
 def _get_in_ports():
@@ -87,7 +89,10 @@ def _arrow_picker(title, subtitle, ports):
     """
     Generic arrow-key picker.
     Returns selected index, or None if cancelled (Q).
+    Raises ValueError if ports is empty.
     """
+    if not ports:
+        raise ValueError(f"No ports available for picker: {title}")
     idx = 0
     while True:
         _clear()
@@ -131,8 +136,9 @@ def choose_midi_port_interactive():
         print("       Run: pip install python-rtmidi")
         return None
 
-    out_ports = _get_out_ports()
-    in_ports  = _get_in_ports()
+    # Single MidiOut instance — reused for both listing and opening
+    mo, out_ports = _get_out_ports()
+    in_ports      = _get_in_ports()
 
     if not out_ports:
         print()
@@ -152,7 +158,6 @@ def choose_midi_port_interactive():
     if out_idx is None:
         return None
 
-    mo = rtmidi.MidiOut()
     mo.open_port(out_idx)
     out_name = out_ports[out_idx]
 
@@ -189,13 +194,19 @@ def choose_midi_port_interactive():
 
 
 class MidiOutput:
-    """Wraps an already-opened rtmidi.MidiOut or opens one by port substring."""
+    """Wraps an already-opened rtmidi.MidiOut or opens one by port substring.
+
+    in_port_name is stored for display and test instructions only.
+    This script does NOT read MIDI input — it only sends.
+    """
 
     def __init__(self, midi_out=None, port_name=None, in_port_name=None,
                  port_substr=None, channel=1):
         self.channel      = max(1, min(16, int(channel))) - 1
         self.midi         = None
         self.opened_name  = port_name or ""
+        # Name of the INPUT port the user should open in their DAW.
+        # Used in status lines and test instructions only — not opened by this script.
         self.in_port_name = in_port_name or ""
 
         if midi_out is not None:
@@ -203,9 +214,9 @@ class MidiOutput:
             return
 
         if port_substr and rtmidi is not None:
-            mo     = rtmidi.MidiOut()
-            ports  = mo.get_ports()
-            needle = port_substr.lower()
+            # Reuse a single MidiOut instance to avoid stale port enumeration
+            mo, ports = _get_out_ports()
+            needle    = port_substr.lower()
             for i, name in enumerate(ports):
                 if needle in name.lower():
                     mo.open_port(i)
@@ -510,13 +521,20 @@ def main():
         "MIDI output",
         "Sends CC on deck change (value = deck 1-4, 0 = unknown).\n"
         "Requires: pip install python-rtmidi\n"
-        "Script sends on OUTPUT port; DAW listens on INPUT port.",
+        "Script sends on OUTPUT port; your DAW listens on INPUT port.\n"
+        "Use --choose-midi for interactive setup (recommended),\n"
+        "or --midi-port / --midi-in-port for headless / scripted use.",
     )
-    gm.add_argument("--list-midi",    action="store_true", help="List all MIDI ports then exit")
-    gm.add_argument("--choose-midi",  action="store_true", help="Two-step interactive port picker")
-    gm.add_argument("--midi-port",    default="",          help="Substring of MIDI output port name")
-    gm.add_argument("--midi-in-port", default="",          help="Substring of MIDI input port name (for display/test only)")
-    gm.add_argument("--midi-channel", type=int, default=1, help="MIDI channel 1-16")
+    gm.add_argument("--list-midi",    action="store_true",
+                    help="List all MIDI input and output ports, then exit")
+    gm.add_argument("--choose-midi",  action="store_true",
+                    help="Interactive two-step port picker (output then input)")
+    gm.add_argument("--midi-port",    default="",
+                    help="Substring match for MIDI OUTPUT port name (e.g. 'loopMIDI')")
+    gm.add_argument("--midi-in-port", default="",
+                    help="Substring match for MIDI INPUT port name shown in status/test instructions. "
+                         "This script only SENDS MIDI — it does not read input.")
+    gm.add_argument("--midi-channel", type=int, default=1,  help="MIDI channel 1-16")
     gm.add_argument("--midi-cc-left",  type=int, default=20, help="CC number for LEFT deck")
     gm.add_argument("--midi-cc-right", type=int, default=21, help="CC number for RIGHT deck")
 
@@ -526,8 +544,8 @@ def main():
         if rtmidi is None:
             print("ERROR: python-rtmidi not installed  (pip install python-rtmidi)")
             sys.exit(1)
-        out_ports = _get_out_ports()
-        in_ports  = _get_in_ports()
+        _, out_ports = _get_out_ports()
+        in_ports     = _get_in_ports()
         print()
         print("  OUTPUT ports (script sends here):")
         for i, n in enumerate(out_ports): print(f"    {i:>2}: {n}")
@@ -558,7 +576,6 @@ def main():
         if rtmidi is None:
             print("WARN: python-rtmidi not installed  (pip install python-rtmidi)")
         else:
-            # resolve explicit in-port name if given
             in_name = ""
             if args.midi_in_port:
                 in_ports = _get_in_ports()
