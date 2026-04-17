@@ -2,10 +2,11 @@
 # Run inside WSL Debian on the rekordbox laptop.
 # Installs Python + rtmidi and writes a UDP->MIDI clock converter.
 # Reads JSON BPM packets from bridge.mjs on UDP 9001
-# and outputs MIDI clock to a virtual MIDI port (loopMIDI / rtmidi).
+# and outputs MIDI clock to a chosen MIDI port (Bome MIDI Translator / any).
 set -euo pipefail
 
 echo "=== Installing Python deps ==="
+sudo apt-get update -y
 sudo apt-get install -y python3 python3-pip python3-venv libasound2-dev
 
 MIDI_DIR="$HOME/midi-clock"
@@ -17,49 +18,77 @@ source .venv/bin/activate
 pip install --quiet python-rtmidi
 
 echo "=== Writing midi_clock.py ==="
-cat > "$MIDI_DIR/midi_clock.py" << 'EOF'
+cat > "$MIDI_DIR/midi_clock.py" << 'PYEOF'
 #!/usr/bin/env python3
 """
-Listens for JSON BPM packets on UDP 9001 (from bridge.mjs)
-and sends MIDI clock (24 ppqn) to a virtual MIDI port.
+UDP -> MIDI clock bridge.
+Reads JSON BPM from bridge.mjs on UDP 9001,
+outputs MIDI clock (24ppqn) + Start/Stop to a user-selected MIDI port.
+Also accepts an optional MIDI input port for monitoring.
 
-On WSL the MIDI port is exposed to Windows via loopMIDI or
-via WSL2's built-in USB/MIDI pass-through if available.
+Usage:
+  python3 midi_clock.py              # interactive port selection
+  python3 midi_clock.py --out 2      # non-interactive, output port index 2
+  python3 midi_clock.py --out 2 --in 0
 """
 import socket
 import json
 import time
 import threading
+import argparse
 import rtmidi
 
 UDP_HOST = '0.0.0.0'
 UDP_PORT = 9001
-MIDI_PORT_NAME = 'ProLink BPM Clock'
-
-# MIDI clock = 24 pulses per quarter note
 PPQN = 24
-
 current_bpm = None
-clock_running = False
+
+
+def list_ports(midi_obj, label):
+    ports = midi_obj.get_ports()
+    print(f"\nAvailable {label} ports:")
+    if not ports:
+        print("  (none found)")
+    for i, name in enumerate(ports):
+        print(f"  [{i}] {name}")
+    return ports
+
+
+def pick_port(ports, label, forced=None):
+    if not ports:
+        return None
+    if forced is not None:
+        if 0 <= forced < len(ports):
+            print(f"Using {label} port [{forced}]: {ports[forced]}")
+            return forced
+        print(f"Port index {forced} out of range, falling back to interactive.")
+    while True:
+        raw = input(f"Select {label} port index (Enter to skip): ").strip()
+        if raw == '':
+            return None
+        if raw.isdigit() and 0 <= int(raw) < len(ports):
+            return int(raw)
+        print(f"  Invalid. Enter 0-{len(ports)-1}.")
+
 
 def midi_clock_thread(midi_out):
-    global current_bpm, clock_running
-    clock_running = True
-    while clock_running:
+    global current_bpm
+    while True:
         bpm = current_bpm
         if bpm is None or bpm <= 0:
             time.sleep(0.01)
             continue
         interval = 60.0 / (bpm * PPQN)
-        midi_out.send_message([0xF8])  # MIDI clock tick
+        midi_out.send_message([0xF8])
         time.sleep(interval)
+
 
 def udp_listener():
     global current_bpm
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((UDP_HOST, UDP_PORT))
     sock.settimeout(1.0)
-    print(f'Listening on UDP {UDP_HOST}:{UDP_PORT}...')
+    print(f'UDP listener on {UDP_HOST}:{UDP_PORT} ...')
     while True:
         try:
             data, _ = sock.recvfrom(1024)
@@ -67,31 +96,46 @@ def udp_listener():
             bpm = msg.get('bpm')
             if bpm and bpm > 0:
                 current_bpm = bpm
-                print(f'\rBPM: {bpm:.2f}  ', end='', flush=True)
+                print(f'\r  BPM: {bpm:.3f}   ', end='', flush=True)
         except socket.timeout:
             continue
         except Exception as e:
             print(f'\nUDP error: {e}')
 
-if __name__ == '__main__':
+
+def main():
+    parser = argparse.ArgumentParser(description='UDP BPM -> MIDI clock')
+    parser.add_argument('--out', type=int, default=None, help='Output port index')
+    parser.add_argument('--in', dest='inp', type=int, default=None, help='Input port index (optional)')
+    args = parser.parse_args()
+
+    # Output port
     midi_out = rtmidi.MidiOut()
-    available = midi_out.get_ports()
-    print('Available MIDI ports:', available)
-
-    # Try to open existing loopMIDI port, else create virtual port
-    target = next((i for i, p in enumerate(available) if 'loopMIDI' in p or 'ProLink' in p), None)
-    if target is not None:
-        midi_out.open_port(target)
-        print(f'Opened MIDI port: {available[target]}')
+    out_ports = list_ports(midi_out, 'OUTPUT')
+    out_idx = pick_port(out_ports, 'OUTPUT', forced=args.out)
+    if out_idx is not None:
+        midi_out.open_port(out_idx)
+        print(f"Opened output: {out_ports[out_idx]}")
     else:
-        midi_out.open_virtual_port(MIDI_PORT_NAME)
-        print(f'Created virtual MIDI port: {MIDI_PORT_NAME}')
+        midi_out.open_virtual_port('ProLink BPM Clock')
+        print("Created virtual output port: ProLink BPM Clock")
 
-    # Send MIDI Start
-    midi_out.send_message([0xFA])
+    # Input port (optional, for monitoring)
+    midi_in = rtmidi.MidiIn()
+    in_ports = list_ports(midi_in, 'INPUT')
+    in_idx = pick_port(in_ports, 'INPUT (optional, monitoring only)', forced=args.inp)
+    if in_idx is not None:
+        midi_in.open_port(in_idx)
+        print(f"Opened input: {in_ports[in_idx]}")
+        midi_in.set_callback(lambda msg, _: None)
+    else:
+        print("No input port selected.")
 
-    t = threading.Thread(target=udp_listener, daemon=True)
-    t.start()
+    midi_out.send_message([0xFA])  # MIDI Start
+    print("\nMIDI Start sent. Waiting for BPM on UDP 9001...")
+    print("Ctrl+C to stop.\n")
+
+    threading.Thread(target=udp_listener, daemon=True).start()
 
     try:
         midi_clock_thread(midi_out)
@@ -99,16 +143,22 @@ if __name__ == '__main__':
         pass
     finally:
         midi_out.send_message([0xFC])  # MIDI Stop
-        print('\nStopped.')
-EOF
+        print('\nMIDI Stop sent. Bye.')
+
+
+if __name__ == '__main__':
+    main()
+PYEOF
+
+chmod +x "$MIDI_DIR/midi_clock.py"
 
 echo ""
 echo "=== Done ==="
-echo "Run the MIDI clock with:"
+echo "Run:"
 echo "  source ~/midi-clock/.venv/bin/activate"
 echo "  python3 ~/midi-clock/midi_clock.py"
 echo ""
-echo "IMPORTANT: On WSL, virtual MIDI ports are not visible to Windows apps directly."
-echo "Install loopMIDI on Windows (https://www.tobias-erichsen.de/software/loopmidi.html)"
-echo "and create a port named 'loopMIDI Port' — the script will auto-connect to it."
-echo "WSL -> loopMIDI -> rekordbox/lighting app on Windows."
+echo "The script lists all MIDI ports (including Bome MIDI Translator virtual ports)"
+echo "and lets you pick input + output interactively by index."
+echo ""
+echo "Non-interactive: python3 ~/midi-clock/midi_clock.py --out 2"
