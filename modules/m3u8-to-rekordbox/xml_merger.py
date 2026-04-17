@@ -1,3 +1,4 @@
+import re
 from io import StringIO
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -54,10 +55,27 @@ def _build_playlist_node(name: str, track_ids: list[str]) -> ET.Element:
 
 
 def _update_counts_recursive(node: ET.Element):
+    """Update Count on folder nodes (Type=0) only. Playlist nodes (Type=1) must not have Count."""
+    if node.get("Type") == "1":
+        # Playlist node: remove Count if present (ET may have added it), never set it
+        node.attrib.pop("Count", None)
+        return
     children = node.findall("NODE")
     node.set("Count", str(len(children)))
     for child in children:
         _update_counts_recursive(child)
+
+
+def _fix_xml(body: str) -> str:
+    """Fix Rekordbox XML serialization issues from ElementTree:
+
+    1. ET.indent() adds Count="0" to every NODE. Strip it from Type="1" playlist nodes.
+    2. Python 3.8+ ET emits ' />' (space before slash). Rekordbox rejects this.
+    """
+    body = re.sub(r'(<NODE\b[^>]*?\bType="1"[^>]*?)\s+Count="[^"]*"', r'\1', body)
+    body = re.sub(r'(<NODE\b[^>]*?)\s+Count="[^"]*"([^>]*?\bType="1"[^>]*?>)', r'\1\2', body)
+    body = re.sub(r' />', '/>', body)
+    return body
 
 
 def _write_rb_xml(tree: ET.ElementTree, xml_path: Path) -> None:
@@ -65,7 +83,7 @@ def _write_rb_xml(tree: ET.ElementTree, xml_path: Path) -> None:
     ET.indent(tree, space="  ")
     buf = StringIO()
     tree.write(buf, encoding="unicode", xml_declaration=False)
-    body = buf.getvalue()
+    body = _fix_xml(buf.getvalue())
     output = '<?xml version="1.0" encoding="UTF-8"?>\r\n' + body.replace('\n', '\r\n')
     xml_path.write_text(output, encoding="utf-8")
 
